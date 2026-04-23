@@ -57,13 +57,13 @@ Main node `config.json`:
 ```json
 {
   "role": "main",
-  "httpListen": "127.0.0.1:8080",
+  "http_listen": "127.0.0.1:8080",
   "inbound": {
     "listen": ":443",
-    "publicHost": "main.example.com",
-    "serverName": "www.cloudflare.com",
-    "privateKey": "...",
-    "shortId": "..."
+    "public_host": "main.example.com",
+    "server_name": "www.cloudflare.com",
+    "private_key": "...",
+    "short_id": "..."
   },
   "routes": [
     {
@@ -83,13 +83,13 @@ Out node `config.json`:
 ```json
 {
   "role": "out",
-  "httpListen": "127.0.0.1:8080",
+  "http_listen": "127.0.0.1:8080",
   "inbound": {
     "listen": ":443",
-    "serverName": "www.cloudflare.com",
-    "privateKey": "...",
-    "shortId": "...",
-    "relayUUID": "..."
+    "server_name": "www.cloudflare.com",
+    "private_key": "...",
+    "short_id": "...",
+    "relay_uuid": "..."
   }
 }
 ```

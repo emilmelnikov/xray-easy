@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
 const (
 	testPrivateKey = "aGSYystUbf59_9_6LKRxD27rmSW_-2_nyd9YG_Gwbks"
@@ -80,5 +84,65 @@ func TestValidateRelayOutbound(t *testing.T) {
 
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestConfigJSONUsesSnakeCaseKeys(t *testing.T) {
+	cfg := &Config{
+		Role:       RoleMain,
+		HTTPListen: DefaultHTTPListen,
+		Inbound: Inbound{
+			Listen:     ":443",
+			PublicHost: "main.example.com",
+			ServerName: "www.cloudflare.com",
+			PrivateKey: testPrivateKey,
+			ShortID:    testShortID,
+		},
+		Routes: []RouteEntry{
+			{
+				ID:    1,
+				Name:  "relay",
+				Title: "relay",
+				Outbound: Outbound{
+					Type:       OutboundTypeRelay,
+					Address:    "relay.example.com",
+					Port:       443,
+					ServerName: "www.cloudflare.com",
+					PublicKey:  testPublicKey,
+					ShortID:    testShortID,
+					UUID:       testUUID,
+				},
+			},
+		},
+	}
+
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	text := string(data)
+	for _, key := range []string{
+		`"http_listen"`,
+		`"public_host"`,
+		`"server_name"`,
+		`"private_key"`,
+		`"short_id"`,
+		`"public_key"`,
+	} {
+		if !strings.Contains(text, key) {
+			t.Fatalf("marshaled config missing key %s: %s", key, text)
+		}
+	}
+	for _, key := range []string{
+		`"httpListen"`,
+		`"publicHost"`,
+		`"serverName"`,
+		`"privateKey"`,
+		`"shortId"`,
+		`"publicKey"`,
+	} {
+		if strings.Contains(text, key) {
+			t.Fatalf("marshaled config contains camelCase key %s: %s", key, text)
+		}
 	}
 }

@@ -26,18 +26,18 @@ const (
 
 type Config struct {
 	Role       string       `json:"role"`
-	HTTPListen string       `json:"httpListen,omitempty"`
+	HTTPListen string       `json:"http_listen,omitempty"`
 	Inbound    Inbound      `json:"inbound"`
 	Routes     []RouteEntry `json:"routes,omitempty"`
 }
 
 type Inbound struct {
 	Listen     string `json:"listen"`
-	PublicHost string `json:"publicHost,omitempty"`
-	ServerName string `json:"serverName"`
-	PrivateKey string `json:"privateKey"`
-	ShortID    string `json:"shortId"`
-	RelayUUID  string `json:"relayUUID,omitempty"`
+	PublicHost string `json:"public_host,omitempty"`
+	ServerName string `json:"server_name"`
+	PrivateKey string `json:"private_key"`
+	ShortID    string `json:"short_id"`
+	RelayUUID  string `json:"relay_uuid,omitempty"`
 }
 
 type RouteEntry struct {
@@ -51,9 +51,9 @@ type Outbound struct {
 	Type       string `json:"type"`
 	Address    string `json:"address,omitempty"`
 	Port       int    `json:"port,omitempty"`
-	ServerName string `json:"serverName,omitempty"`
-	PublicKey  string `json:"publicKey,omitempty"`
-	ShortID    string `json:"shortId,omitempty"`
+	ServerName string `json:"server_name,omitempty"`
+	PublicKey  string `json:"public_key,omitempty"`
+	ShortID    string `json:"short_id,omitempty"`
 	UUID       string `json:"uuid,omitempty"`
 }
 
@@ -115,7 +115,7 @@ func (c *Config) Validate() error {
 	if c.Role != RoleMain && c.Role != RoleOut {
 		return fmt.Errorf("invalid config role %q", c.Role)
 	}
-	if err := validateListen(c.HTTPListen, "httpListen"); err != nil {
+	if err := validateListen(c.HTTPListen, "http_listen"); err != nil {
 		return err
 	}
 	if err := c.Inbound.validate(c.Role); err != nil {
@@ -125,7 +125,7 @@ func (c *Config) Validate() error {
 	switch c.Role {
 	case RoleMain:
 		if c.Inbound.PublicHost == "" {
-			return errors.New("main config inbound.publicHost is required")
+			return errors.New("main config inbound.public_host is required")
 		}
 		if len(c.Routes) == 0 {
 			return errors.New("main config requires at least one route")
@@ -156,13 +156,13 @@ func (c *Config) Validate() error {
 			return errors.New("out config must not define routes")
 		}
 		if c.Inbound.RelayUUID == "" {
-			return errors.New("out config inbound.relayUUID is required")
+			return errors.New("out config inbound.relay_uuid is required")
 		}
 		if _, err := uuidroute.Parse(c.Inbound.RelayUUID); err != nil {
-			return fmt.Errorf("out config inbound.relayUUID is invalid: %w", err)
+			return fmt.Errorf("out config inbound.relay_uuid is invalid: %w", err)
 		}
 		if c.Inbound.PublicHost != "" {
-			return errors.New("out config inbound.publicHost must be empty")
+			return errors.New("out config inbound.public_host must be empty")
 		}
 	}
 
@@ -174,17 +174,17 @@ func (i Inbound) validate(role string) error {
 		return err
 	}
 	if i.ServerName == "" {
-		return errors.New("inbound.serverName is required")
+		return errors.New("inbound.server_name is required")
 	}
-	if err := validateBase64Key(i.PrivateKey, 32, "inbound.privateKey"); err != nil {
+	if err := validateBase64Key(i.PrivateKey, 32, "inbound.private_key"); err != nil {
 		return err
 	}
-	if err := validateShortID(i.ShortID, "inbound.shortId"); err != nil {
+	if err := validateShortID(i.ShortID, "inbound.short_id"); err != nil {
 		return err
 	}
 	if role == RoleMain {
 		if i.RelayUUID != "" {
-			return errors.New("main config inbound.relayUUID must be empty")
+			return errors.New("main config inbound.relay_uuid must be empty")
 		}
 	}
 	return nil
@@ -202,12 +202,12 @@ func (o Outbound) validate(routeName string) error {
 			return fmt.Errorf("relay outbound.port %d is invalid", o.Port)
 		}
 		if o.ServerName == "" {
-			return errors.New("relay outbound.serverName is required")
+			return errors.New("relay outbound.server_name is required")
 		}
-		if err := validateBase64Key(o.PublicKey, 32, "relay outbound.publicKey"); err != nil {
+		if err := validateBase64Key(o.PublicKey, 32, "relay outbound.public_key"); err != nil {
 			return err
 		}
-		if err := validateShortID(o.ShortID, "relay outbound.shortId"); err != nil {
+		if err := validateShortID(o.ShortID, "relay outbound.short_id"); err != nil {
 			return err
 		}
 		if o.UUID == "" {
