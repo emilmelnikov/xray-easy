@@ -48,12 +48,44 @@ func TestMainHandlerServesProfileAndSubscription(t *testing.T) {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
 
-	t.Run("landing", func(t *testing.T) {
+	t.Run("fallback redirects to auth", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusFound {
+			t.Fatalf("fallback status = %d, want %d", rec.Code, http.StatusFound)
+		}
+		if rec.Header().Get("Location") != "/auth" {
+			t.Fatalf("fallback location = %q, want /auth", rec.Header().Get("Location"))
+		}
+	})
+
+	t.Run("auth form", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/auth", nil)
+		handler.ServeHTTP(rec, req)
+		body, _ := io.ReadAll(rec.Body)
 		if rec.Code != http.StatusOK {
-			t.Fatalf("landing status = %d, want %d", rec.Code, http.StatusOK)
+			t.Fatalf("auth status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		text := string(body)
+		if !strings.Contains(text, `<form method="post" action="/auth">`) || !strings.Contains(text, `type="password"`) {
+			t.Fatalf("auth body = %q, want login form", text)
+		}
+	})
+
+	t.Run("auth post shows invalid credentials", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/auth", strings.NewReader("email=alice%40example.com&password=secret"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		handler.ServeHTTP(rec, req)
+		body, _ := io.ReadAll(rec.Body)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("auth post status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		text := string(body)
+		if !strings.Contains(text, "Invalid email or password.") || !strings.Contains(text, "alice@example.com") {
+			t.Fatalf("auth post body = %q, want invalid credentials and submitted email", text)
 		}
 	})
 
@@ -88,13 +120,16 @@ func TestMainHandlerServesProfileAndSubscription(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/profile/missing", nil)
 		handler.ServeHTTP(rec, req)
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("missing token status = %d, want %d", rec.Code, http.StatusNotFound)
+		if rec.Code != http.StatusFound {
+			t.Fatalf("missing token status = %d, want %d", rec.Code, http.StatusFound)
+		}
+		if rec.Header().Get("Location") != "/auth" {
+			t.Fatalf("missing token location = %q, want /auth", rec.Header().Get("Location"))
 		}
 	})
 }
 
-func TestOutHandlerOnlyServesLandingPage(t *testing.T) {
+func TestOutHandlerServesAuthFallback(t *testing.T) {
 	cfg := &config.Config{
 		Role:       config.RoleOut,
 		HTTPListen: config.DefaultHTTPListen,
@@ -115,7 +150,21 @@ func TestOutHandlerOnlyServesLandingPage(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/profile/token-1", nil)
 	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("out handler status = %d, want %d", rec.Code, http.StatusNotFound)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("out handler status = %d, want %d", rec.Code, http.StatusFound)
+	}
+	if rec.Header().Get("Location") != "/auth" {
+		t.Fatalf("out handler location = %q, want /auth", rec.Header().Get("Location"))
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/auth", nil)
+	handler.ServeHTTP(rec, req)
+	body, _ := io.ReadAll(rec.Body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("out auth status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if strings.Contains(strings.ToLower(string(body)), "xray") {
+		t.Fatalf("out auth body exposes xray: %q", string(body))
 	}
 }
