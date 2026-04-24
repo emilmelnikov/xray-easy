@@ -29,8 +29,10 @@ archives:
     ids:
       - xray-easy
     formats:
-      - binary
+      - gz
     name_template: "xray-easy-linux-{{ .Arch }}"
+    files:
+      - none*
 
 checksum:
   name_template: checksums.txt

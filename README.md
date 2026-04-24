@@ -61,14 +61,14 @@ This uses `.goreleaser.yaml` and writes artifacts under `dist/`. Install GoRelea
 go install github.com/goreleaser/goreleaser/v2@latest
 ```
 
-Pushing a tag matching `v*` runs the release workflow. It tests the module, then GoReleaser builds Linux `amd64` and `arm64` binaries, writes `checksums.txt`, signs that checksum file with Cosign keyless signing, and publishes a GitHub Release with those assets.
+Pushing a tag matching `v*` runs the release workflow. It tests the module, then GoReleaser builds Linux `amd64` and `arm64` binaries, compresses them with gzip, writes `checksums.txt`, signs that checksum file with Cosign keyless signing, and publishes a GitHub Release with those assets.
 
 ## Cloud Init
 
 The cloud-init example lives in `contrib/cloud-init/xray-easy.yaml`. It prepares a fresh systemd host by:
 
-- installing `ca-certificates` and `curl`
-- downloading the latest GitHub Releases binary to `/usr/local/bin/xray-easy`
+- installing `ca-certificates`, `cosign`, `curl`, and `gzip`
+- downloading, verifying, and decompressing the latest GitHub Releases binary to `/usr/local/bin/xray-easy`
 - installing `/usr/local/sbin/update-xray-easy`
 - creating the `xray-easy` user/group
 - creating `/etc/xray-easy`
@@ -76,10 +76,12 @@ The cloud-init example lives in `contrib/cloud-init/xray-easy.yaml`. It prepares
 - installing `/etc/default/xray-easy`
 - enabling the service
 
-The release assets are expected to be named:
+The compressed release assets are expected to be named:
 
-- `xray-easy-linux-amd64`
-- `xray-easy-linux-arm64`
+- `xray-easy-linux-amd64.gz`
+- `xray-easy-linux-arm64.gz`
+
+The install and update scripts also download `checksums.txt` and `checksums.txt.sigstore.json`, verify the checksum file with Cosign keyless signing for this repository's release workflow, and then verify the compressed binary checksum before installation.
 
 The generated unit assumes:
 

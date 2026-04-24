@@ -2,7 +2,9 @@
 package_update: true
 packages:
   - ca-certificates
+  - cosign
   - curl
+  - gzip
 
 write_files:
   - path: /usr/local/sbin/install-xray-easy
@@ -28,18 +30,34 @@ write_files:
           ;;
       esac
 
-      asset="xray-easy-linux-${arch}"
+      asset="xray-easy-linux-${arch}.gz"
       if [ "$version" = "latest" ]; then
-        url="https://github.com/${github_repo}/releases/latest/download/${asset}"
+        base_url="https://github.com/${github_repo}/releases/latest/download"
       else
-        url="https://github.com/${github_repo}/releases/download/${version}/${asset}"
+        base_url="https://github.com/${github_repo}/releases/download/${version}"
       fi
 
-      tmp="$(mktemp)"
-      trap 'rm -f "$tmp"' EXIT
+      tmp_dir="$(mktemp -d)"
+      trap 'rm -rf "$tmp_dir"' EXIT
+      asset_path="${tmp_dir}/${asset}"
+      checksums_path="${tmp_dir}/checksums.txt"
+      bundle_path="${tmp_dir}/checksums.txt.sigstore.json"
+      bin_tmp="${tmp_dir}/xray-easy"
 
-      curl --fail --location --retry 3 --output "$tmp" "$url"
-      install -o root -g root -m 0755 "$tmp" /usr/local/bin/xray-easy
+      curl --fail --location --retry 3 --output "$asset_path" "${base_url}/${asset}"
+      curl --fail --location --retry 3 --output "$checksums_path" "${base_url}/checksums.txt"
+      curl --fail --location --retry 3 --output "$bundle_path" "${base_url}/checksums.txt.sigstore.json"
+
+      escaped_repo="$(printf '%s' "$github_repo" | sed 's|[][\\.^$*+?{}()|]|\\&|g')"
+      cosign verify-blob \
+        --bundle "$bundle_path" \
+        --certificate-identity-regexp "https://github.com/${escaped_repo}/.github/workflows/release.yml@refs/tags/.*" \
+        --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+        "$checksums_path"
+
+      (cd "$tmp_dir" && grep "  ${asset}$" checksums.txt | sha256sum -c -)
+      gzip -dc "$asset_path" > "$bin_tmp"
+      install -o root -g root -m 0755 "$bin_tmp" /usr/local/bin/xray-easy
   - path: /usr/local/sbin/update-xray-easy
     owner: root:root
     permissions: "0755"
