@@ -1,0 +1,54 @@
+version: 2
+
+project_name: xray-easy
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: xray-easy
+    main: .
+    binary: xray-easy
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -mod=readonly
+      - -trimpath
+    ldflags:
+      - -s -w -buildid=
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: binary
+    ids:
+      - xray-easy
+    formats:
+      - binary
+    name_template: "xray-easy-linux-{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+signs:
+  - id: checksums
+    cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+
+changelog:
+  use: github-native
+
+release:
+  prerelease: auto

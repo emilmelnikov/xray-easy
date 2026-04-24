@@ -50,6 +50,60 @@ Then run the out node:
 xray-easy serve -config relay-config.json
 ```
 
+## Build
+
+Build release-style binaries locally with GoReleaser:
+
+```bash
+goreleaser build --snapshot --clean
+```
+
+This uses `.goreleaser.yaml` and writes artifacts under `dist/`. Install GoReleaser with:
+
+```bash
+go install github.com/goreleaser/goreleaser/v2@latest
+```
+
+Pushing a tag matching `v*` runs the release workflow. It tests the module, then GoReleaser builds Linux `amd64` and `arm64` binaries, writes `checksums.txt`, signs that checksum file with Cosign keyless signing, and publishes a GitHub Release with those assets.
+
+## Cloud Init
+
+The cloud-init example lives in `contrib/cloud-init/xray-easy.yaml`. It prepares a fresh systemd host by:
+
+- installing `ca-certificates` and `curl`
+- downloading the latest GitHub Releases binary to `/usr/local/bin/xray-easy`
+- creating the `xray-easy` user/group
+- creating `/etc/xray-easy`
+- installing `/etc/systemd/system/xray-easy.service`
+- installing `/etc/default/xray-easy`
+- enabling the service
+
+The release assets are expected to be named:
+
+- `xray-easy-linux-amd64`
+- `xray-easy-linux-arm64`
+
+The generated unit assumes:
+
+- binary: `/usr/local/bin/xray-easy`
+- config directory: `/etc/xray-easy`
+- config file: `/etc/xray-easy/config.json`
+- users file: `/etc/xray-easy/users.json`
+- runtime user/group: `xray-easy`
+
+Optional service overrides can be placed in `/etc/default/xray-easy`:
+
+```sh
+XRAY_EASY_CONFIG=/etc/xray-easy/config.json
+XRAY_EASY_USERS=/etc/xray-easy/users.json
+```
+
+Out nodes can use the same unit. The `-users` path is ignored when `config.json` has `"role": "out"`.
+
+The unit grants `CAP_NET_BIND_SERVICE` so the service user can bind ports below 1024.
+
+The cloud-init example enables but does not start the service because `config.json` and, for main nodes, `users.json` still need to be installed.
+
 ## Config Files
 
 Main node `config.json`:

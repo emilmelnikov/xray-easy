@@ -1,0 +1,86 @@
+#cloud-config
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+
+write_files:
+  - path: /usr/local/sbin/install-xray-easy
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env sh
+      set -eu
+
+      github_repo="${XRAY_EASY_GITHUB_REPO:-emilmelnikov/xray-easy}"
+      version="${XRAY_EASY_VERSION:-latest}"
+
+      case "$(uname -m)" in
+        x86_64|amd64)
+          arch="amd64"
+          ;;
+        aarch64|arm64)
+          arch="arm64"
+          ;;
+        *)
+          echo "unsupported architecture: $(uname -m)" >&2
+          exit 1
+          ;;
+      esac
+
+      asset="xray-easy-linux-${arch}"
+      if [ "$version" = "latest" ]; then
+        url="https://github.com/${github_repo}/releases/latest/download/${asset}"
+      else
+        url="https://github.com/${github_repo}/releases/download/${version}/${asset}"
+      fi
+
+      tmp="$(mktemp)"
+      trap 'rm -f "$tmp"' EXIT
+
+      curl --fail --location --retry 3 --output "$tmp" "$url"
+      install -o root -g root -m 0755 "$tmp" /usr/local/bin/xray-easy
+  - path: /etc/systemd/system/xray-easy.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=xray-easy service
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=xray-easy
+      Group=xray-easy
+      WorkingDirectory=/etc/xray-easy
+      Environment=XRAY_EASY_CONFIG=/etc/xray-easy/config.json
+      Environment=XRAY_EASY_USERS=/etc/xray-easy/users.json
+      EnvironmentFile=-/etc/default/xray-easy
+      ExecStart=/usr/local/bin/xray-easy serve -config ${XRAY_EASY_CONFIG} -users ${XRAY_EASY_USERS}
+      Restart=on-failure
+      RestartSec=5s
+      NoNewPrivileges=true
+      PrivateTmp=true
+      ProtectHome=true
+      ProtectSystem=strict
+      ReadWritePaths=/etc/xray-easy
+      AmbientCapabilities=CAP_NET_BIND_SERVICE
+      CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+      [Install]
+      WantedBy=multi-user.target
+  - path: /etc/default/xray-easy
+    owner: root:root
+    permissions: "0644"
+    content: |
+      XRAY_EASY_CONFIG=/etc/xray-easy/config.json
+      XRAY_EASY_USERS=/etc/xray-easy/users.json
+
+runcmd:
+  - [sh, -c, "getent group xray-easy >/dev/null || groupadd --system xray-easy"]
+  - [sh, -c, "id -u xray-easy >/dev/null 2>&1 || useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin --gid xray-easy xray-easy"]
+  - [install, -d, -o, xray-easy, -g, xray-easy, -m, "0750", /etc/xray-easy]
+  - [/usr/local/sbin/install-xray-easy]
+  - [systemctl, daemon-reload]
+  - [systemctl, enable, xray-easy.service]
