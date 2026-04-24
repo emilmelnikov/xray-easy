@@ -72,6 +72,7 @@ The cloud-init example lives in `contrib/cloud-init/xray-easy.yaml`. It prepares
 
 - installing `ca-certificates` and `curl`
 - downloading the latest GitHub Releases binary to `/usr/local/bin/xray-easy`
+- installing `/usr/local/sbin/update-xray-easy`
 - creating the `xray-easy` user/group
 - creating `/etc/xray-easy`
 - installing `/etc/systemd/system/xray-easy.service`
@@ -103,6 +104,18 @@ Out nodes can use the same unit. The `-users` path is ignored when `config.json`
 The unit grants `CAP_NET_BIND_SERVICE` so the service user can bind ports below 1024.
 
 The cloud-init example enables but does not start the service because `config.json` and, for main nodes, `users.json` still need to be installed.
+
+Update an installed node to the latest release with:
+
+```bash
+sudo /usr/local/sbin/update-xray-easy
+```
+
+To install a specific release instead, pass `XRAY_EASY_VERSION`:
+
+```bash
+sudo XRAY_EASY_VERSION=v0.1.1 /usr/local/sbin/update-xray-easy
+```
 
 ## Config Files
 

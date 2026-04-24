@@ -40,6 +40,15 @@ write_files:
 
       curl --fail --location --retry 3 --output "$tmp" "$url"
       install -o root -g root -m 0755 "$tmp" /usr/local/bin/xray-easy
+  - path: /usr/local/sbin/update-xray-easy
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env sh
+      set -eu
+
+      XRAY_EASY_VERSION="${XRAY_EASY_VERSION:-latest}" /usr/local/sbin/install-xray-easy
+      systemctl try-restart xray-easy.service
   - path: /etc/systemd/system/xray-easy.service
     owner: root:root
     permissions: "0644"
