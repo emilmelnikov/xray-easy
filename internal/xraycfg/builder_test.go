@@ -77,6 +77,28 @@ func TestBuildJSONMainConfigParsesInXray(t *testing.T) {
 	if root.Log.LogLevel != config.DefaultLogLevel {
 		t.Fatalf("loglevel = %q, want %q", root.Log.LogLevel, config.DefaultLogLevel)
 	}
+	clients := root.Inbounds[0].Settings.Clients
+	if len(clients) != 2 {
+		t.Fatalf("len(clients) = %d, want 2", len(clients))
+	}
+	wantEmails := map[string]bool{
+		"alice@local": false,
+		"alice@relay": false,
+	}
+	for _, client := range clients {
+		if _, ok := wantEmails[client.Email]; !ok {
+			t.Fatalf("unexpected client email %q", client.Email)
+		}
+		if wantEmails[client.Email] {
+			t.Fatalf("duplicate client email %q", client.Email)
+		}
+		wantEmails[client.Email] = true
+	}
+	for email, seen := range wantEmails {
+		if !seen {
+			t.Fatalf("missing client email %q", email)
+		}
+	}
 }
 
 func TestBuildJSONOutConfigParsesInXray(t *testing.T) {

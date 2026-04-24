@@ -138,7 +138,7 @@ func buildMain(cfg *config.Config, file *users.File) (rootConfig, error) {
 		for _, client := range user.Clients {
 			clients = append(clients, clientSettings{
 				ID:    client.UUID,
-				Email: user.Username,
+				Email: clientEmail(user.Username, client.Route),
 				Flow:  "xtls-rprx-vision",
 			})
 		}
@@ -187,6 +187,13 @@ func buildMain(cfg *config.Config, file *users.File) (rootConfig, error) {
 	}
 
 	return root, nil
+}
+
+func clientEmail(username string, route string) string {
+	if route == "" {
+		return username
+	}
+	return username + "@" + route
 }
 
 func buildOut(cfg *config.Config) (rootConfig, error) {
