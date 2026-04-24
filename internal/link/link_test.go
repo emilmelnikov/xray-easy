@@ -45,10 +45,10 @@ func TestUserLinksFollowConfigOrder(t *testing.T) {
 	if len(links) != 2 {
 		t.Fatalf("len(UserLinks()) = %d, want 2", len(links))
 	}
-	if !strings.Contains(links[0], "aaaaaaaa-bbbb-0001-dddd-eeeeeeeeeeee") || !strings.Contains(links[0], "#alice%20Local") {
+	if !strings.Contains(links[0], "aaaaaaaa-bbbb-0001-dddd-eeeeeeeeeeee") || !strings.Contains(links[0], "#Local") {
 		t.Fatalf("first link = %q, want local route first", links[0])
 	}
-	if !strings.Contains(links[1], "aaaaaaaa-bbbb-0002-dddd-eeeeeeeeeeee") || !strings.Contains(links[1], "#alice%20Relay") {
+	if !strings.Contains(links[1], "aaaaaaaa-bbbb-0002-dddd-eeeeeeeeeeee") || !strings.Contains(links[1], "#Relay") {
 		t.Fatalf("second link = %q, want relay route second", links[1])
 	}
 	if !strings.Contains(links[0], "sid=0123456789abcdef") || !strings.Contains(links[0], "security=reality") {

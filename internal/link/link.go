@@ -41,7 +41,7 @@ func UserLinks(cfg *config.Config, user users.User) ([]string, error) {
 			User:     url.User(client.UUID),
 			Host:     net.JoinHostPort(cfg.Inbound.ServerName, port),
 			Path:     "",
-			Fragment: fmt.Sprintf("%s %s", user.Username, route.DisplayTitle()),
+			Fragment: route.DisplayTitle(),
 		}
 
 		values := url.Values{

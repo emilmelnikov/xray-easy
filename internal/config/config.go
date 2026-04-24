@@ -28,15 +28,18 @@ const (
 	DefaultCertCache      = "certs"
 	DefaultCADirURL       = "https://acme-v02.api.letsencrypt.org/directory"
 	DefaultLogLevel       = "warning"
+	DefaultProfileUpdate  = 24
 )
 
 type Config struct {
-	Role        string       `json:"role"`
-	HTTPListen  string       `json:"http_listen,omitempty"`
-	LogLevel    string       `json:"loglevel,omitempty"`
-	Certificate Certificate  `json:"certificate,omitempty"`
-	Inbound     Inbound      `json:"inbound"`
-	Routes      []RouteEntry `json:"routes,omitempty"`
+	Role                  string       `json:"role"`
+	HTTPListen            string       `json:"http_listen,omitempty"`
+	LogLevel              string       `json:"loglevel,omitempty"`
+	SubscriptionTitle     string       `json:"subscription_title,omitempty"`
+	ProfileUpdateInterval int          `json:"profile_update_interval,omitempty"`
+	Certificate           Certificate  `json:"certificate,omitempty"`
+	Inbound               Inbound      `json:"inbound"`
+	Routes                []RouteEntry `json:"routes,omitempty"`
 }
 
 type Certificate struct {
@@ -121,6 +124,12 @@ func (c *Config) Normalize() {
 	if c.LogLevel == "" {
 		c.LogLevel = DefaultLogLevel
 	}
+	if c.Role != RoleOut && c.SubscriptionTitle == "" {
+		c.SubscriptionTitle = c.Inbound.ServerName
+	}
+	if c.Role != RoleOut && c.ProfileUpdateInterval == 0 {
+		c.ProfileUpdateInterval = DefaultProfileUpdate
+	}
 	if c.Role != RoleOut && c.Certificate.CacheDir == "" {
 		c.Certificate.CacheDir = DefaultCertCache
 	}
@@ -159,6 +168,9 @@ func (c *Config) Validate() error {
 		}
 		if err := c.Certificate.validate(); err != nil {
 			return err
+		}
+		if c.ProfileUpdateInterval < 1 {
+			return errors.New("profile_update_interval must be positive")
 		}
 		if len(c.Routes) == 0 {
 			return errors.New("main config requires at least one route")

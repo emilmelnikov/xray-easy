@@ -94,11 +94,16 @@ func runInitConfig(args []string, entropy io.Reader) error {
 	certHTTPListen := fs.String("cert-http-listen", config.DefaultCertHTTPListen, "public HTTP-01 listen address")
 	certCache := fs.String("cert-cache", config.DefaultCertCache, "certificate cache directory")
 	caDirURL := fs.String("ca-dir-url", config.DefaultCADirURL, "ACME directory URL")
+	title := fs.String("title", "", "main route title")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *serverName == "" {
 		return errors.New("-server-name is required")
+	}
+	routeTitle := "main"
+	if *title != "" {
+		routeTitle = *title
 	}
 
 	privateKey, _, err := secret.GenerateX25519(entropy)
@@ -131,8 +136,8 @@ func runInitConfig(args []string, entropy io.Reader) error {
 		Routes: []config.RouteEntry{
 			{
 				ID:    routeID,
-				Name:  "local",
-				Title: "local",
+				Name:  "main",
+				Title: routeTitle,
 				Outbound: config.Outbound{
 					Type: config.OutboundTypeFreedom,
 				},

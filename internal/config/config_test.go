@@ -129,6 +129,8 @@ func TestConfigJSONUsesSnakeCaseKeys(t *testing.T) {
 	for _, key := range []string{
 		`"http_listen"`,
 		`"loglevel"`,
+		`"subscription_title"`,
+		`"profile_update_interval"`,
 		`"cache_dir"`,
 		`"ca_dir_url"`,
 		`"server_name"`,
@@ -143,6 +145,8 @@ func TestConfigJSONUsesSnakeCaseKeys(t *testing.T) {
 	for _, key := range []string{
 		`"httpListen"`,
 		`"logLevel"`,
+		`"subscriptionTitle"`,
+		`"profileUpdateInterval"`,
 		`"cacheDir"`,
 		`"caDirURL"`,
 		`"publicHost"`,
@@ -162,6 +166,56 @@ func TestNormalizeDefaultsLogLevel(t *testing.T) {
 	cfg.Normalize()
 	if cfg.LogLevel != DefaultLogLevel {
 		t.Fatalf("LogLevel = %q, want %q", cfg.LogLevel, DefaultLogLevel)
+	}
+}
+
+func TestNormalizeDefaultsSubscriptionTitle(t *testing.T) {
+	cfg := &Config{
+		Role: RoleMain,
+		Inbound: Inbound{
+			ServerName: "main.example.com",
+		},
+	}
+
+	cfg.Normalize()
+	if cfg.SubscriptionTitle != "main.example.com" {
+		t.Fatalf("SubscriptionTitle = %q, want main.example.com", cfg.SubscriptionTitle)
+	}
+}
+
+func TestNormalizeDefaultsProfileUpdateInterval(t *testing.T) {
+	cfg := &Config{
+		Role: RoleMain,
+		Inbound: Inbound{
+			ServerName: "main.example.com",
+		},
+	}
+
+	cfg.Normalize()
+	if cfg.ProfileUpdateInterval != DefaultProfileUpdate {
+		t.Fatalf("ProfileUpdateInterval = %d, want %d", cfg.ProfileUpdateInterval, DefaultProfileUpdate)
+	}
+}
+
+func TestValidateProfileUpdateInterval(t *testing.T) {
+	cfg := &Config{
+		Role:                  RoleMain,
+		HTTPListen:            DefaultHTTPListen,
+		ProfileUpdateInterval: -1,
+		Certificate:           testCertificate(),
+		Inbound: Inbound{
+			Listen:     ":443",
+			ServerName: "main.example.com",
+			PrivateKey: testPrivateKey,
+			ShortID:    testShortID,
+		},
+		Routes: []RouteEntry{
+			{ID: 1, Name: "local", Title: "local", Outbound: Outbound{Type: OutboundTypeFreedom}},
+		},
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() error = nil, want invalid profile_update_interval error")
 	}
 }
 

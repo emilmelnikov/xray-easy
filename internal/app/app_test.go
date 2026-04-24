@@ -42,6 +42,12 @@ func TestRunInitConfig(t *testing.T) {
 	if cfg.Role != config.RoleMain {
 		t.Fatalf("cfg.Role = %q, want %q", cfg.Role, config.RoleMain)
 	}
+	if len(cfg.Routes) != 1 {
+		t.Fatalf("len(cfg.Routes) = %d, want 1", len(cfg.Routes))
+	}
+	if cfg.Routes[0].Name != "main" || cfg.Routes[0].Title != "main" {
+		t.Fatalf("default route = %+v, want main/main", cfg.Routes[0])
+	}
 
 	file, err := users.Load(filepath.Join(dir, "users.json"))
 	if err != nil {
@@ -49,6 +55,36 @@ func TestRunInitConfig(t *testing.T) {
 	}
 	if len(file.Users) != 0 {
 		t.Fatalf("len(users) = %d, want 0", len(file.Users))
+	}
+}
+
+func TestRunInitConfigTitle(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.json")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	entropy := bytes.NewReader(bytes.Repeat([]byte{0x12}, 64))
+
+	err := run([]string{
+		"init-config",
+		"-output", configPath,
+		"-server-name", "main.example.com",
+		"-title", "Primary",
+	}, &stdout, &stderr, entropy)
+	if err != nil {
+		t.Fatalf("run(init-config) error = %v, stderr = %q", err, stderr.String())
+	}
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		t.Fatalf("config.Load() error = %v", err)
+	}
+	if len(cfg.Routes) != 1 {
+		t.Fatalf("len(cfg.Routes) = %d, want 1", len(cfg.Routes))
+	}
+	if cfg.Routes[0].Name != "main" || cfg.Routes[0].Title != "Primary" {
+		t.Fatalf("default route = %+v, want main/Primary", cfg.Routes[0])
 	}
 }
 

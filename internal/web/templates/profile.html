@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{.Lang}}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -49,6 +49,46 @@
       grid-template-columns: minmax(0, 1fr) 320px;
       gap: 24px;
       align-items: stretch;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .language-switcher {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px;
+      background: rgb(255 255 255 / 64%);
+      box-shadow: 0 12px 36px rgb(30 41 35 / 9%);
+    }
+
+    .language-label {
+      padding: 0 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .language-link {
+      border-radius: 999px;
+      padding: 8px 12px;
+      color: var(--accent-strong);
+      font-size: 13px;
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    .language-link.current {
+      background: var(--accent);
+      color: #fff;
     }
 
     .panel {
@@ -236,7 +276,7 @@
       display: grid;
       gap: 12px;
       margin: 0;
-      padding: 0;
+      padding: 0 20px 20px;
       list-style: none;
     }
 
@@ -301,6 +341,13 @@
       list-style: none;
     }
 
+    .details-hint {
+      margin: -4px 20px 16px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
     .deeplink {
       display: block;
       border: 1px solid var(--line);
@@ -321,17 +368,50 @@
       transform: translateY(-1px);
     }
 
-    .footer-note {
-      margin: 24px 0 0;
-      color: var(--muted);
-      font-size: 13px;
-      text-align: center;
+    .privacy-note {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      border: 1px solid rgb(15 123 99 / 20%);
+      border-radius: 20px;
+      padding: 16px 18px;
+      background: rgb(223 244 237 / 58%);
+      color: #29443b;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.45;
+      box-shadow: 0 12px 32px rgb(30 41 35 / 8%);
+    }
+
+    .privacy-note::before {
+      content: "!";
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 900;
+      line-height: 1;
     }
 
     @media (max-width: 820px) {
       main {
         width: min(100% - 24px, 620px);
         padding: 24px 0;
+      }
+
+      .topbar {
+        grid-template-columns: 1fr;
+      }
+
+      .language-switcher {
+        order: -1;
+        width: 100%;
+        justify-content: center;
       }
 
       .hero,
@@ -356,62 +436,65 @@
 </head>
 <body>
   <main>
+    <header class="topbar">
+      <p class="privacy-note">{{.Text.FooterNote}}</p>
+      <nav class="language-switcher" aria-label="{{.Text.Language}}">
+        <span class="language-label">{{.Text.Language}}</span>
+        {{range .LanguageLinks}}
+          <a class="language-link{{if .Current}} current{{end}}" href="{{.URL}}" hreflang="{{.Code}}" lang="{{.Code}}"{{if .Current}} aria-current="true"{{end}}>{{.Label}}</a>
+        {{end}}
+      </nav>
+    </header>
+
     <section class="hero" aria-labelledby="profile-title">
       <div class="panel intro">
-        <p class="eyebrow">Private access profile</p>
+        <p class="eyebrow">{{.Text.PrivateAccessProfile}}</p>
         <h1 id="profile-title">{{.Username}}</h1>
-        <p class="lede">Scan the code or copy the subscription URL into your client app. Individual connection links are available below for manual import.</p>
+        <p class="lede">{{.Text.Lede}}</p>
       </div>
-      <aside class="panel qr-card" aria-label="Subscription QR code">
+      <aside class="panel qr-card" aria-label="{{.Text.QRCodeAria}}">
         <div class="qr-frame">
-          <img src="{{.QRCodeDataURL}}" alt="Subscription QR code">
+          <img src="{{.QRCodeDataURL}}" alt="{{.Text.QRCodeAlt}}">
         </div>
-        <p class="qr-caption">This QR code contains the subscription URL for this profile.</p>
+        <p class="qr-caption">{{.Text.QRCaption}}</p>
       </aside>
     </section>
 
     <section class="panel section" aria-labelledby="subscription-title">
       <div class="section-head">
         <div>
-          <h2 id="subscription-title">Subscription</h2>
-          <p class="hint">Best option for client apps that support subscriptions.</p>
+          <h2 id="subscription-title">{{.Text.SubscriptionTitle}}</h2>
+          <p class="hint">{{.Text.SubscriptionHint}}</p>
         </div>
-        <a class="button secondary" href="{{.SubscriptionURL}}">Open</a>
       </div>
       <div class="copy-row">
-        <input class="readonly" value="{{.SubscriptionURL}}" readonly aria-label="Subscription URL">
-        <button class="button" type="button" data-copy="{{.SubscriptionURL}}">Copy URL</button>
+        <input class="readonly" value="{{.SubscriptionURL}}" readonly aria-label="{{.Text.SubscriptionURLAria}}">
+        <button class="button" type="button" data-copy="{{.SubscriptionURL}}">{{.Text.CopyURL}}</button>
       </div>
       <details class="deeplinks">
-        <summary>Open in a proxy client</summary>
+        <summary>{{.Text.OpenInProxyClient}}</summary>
         <ul class="deeplink-grid">
         {{range .DeepLinks}}
           <li><a class="deeplink" href="{{.URL}}">{{.Name}}</a></li>
         {{end}}
         </ul>
       </details>
+      <details class="deeplinks">
+        <summary>{{.Text.LinksTitle}}</summary>
+        <p class="details-hint">{{.Text.LinksHint}}</p>
+        <ul class="links">
+        {{range .Links}}
+          <li class="link-item">
+            <textarea class="readonly link" readonly aria-label="{{$.Text.ConnectionLinkAria}}">{{.}}</textarea>
+            <button class="button secondary" type="button" data-copy="{{.}}">{{$.Text.Copy}}</button>
+          </li>
+        {{end}}
+        </ul>
+      </details>
     </section>
-
-    <section class="panel section" aria-labelledby="links-title">
-      <div class="section-head">
-        <div>
-          <h2 id="links-title">Connection Links</h2>
-          <p class="hint">Use these when you need to import a single route manually.</p>
-        </div>
-      </div>
-      <ul class="links">
-      {{range .Links}}
-        <li class="link-item">
-          <textarea class="readonly link" readonly aria-label="Connection link">{{.}}</textarea>
-          <button class="button secondary" type="button" data-copy="{{.}}">Copy</button>
-        </li>
-      {{end}}
-      </ul>
-    </section>
-
-    <p class="footer-note">Keep this page URL private. Anyone with the token can read this profile.</p>
   </main>
   <script>
+    var copiedLabel = {{.Text.Copied}};
     document.querySelectorAll("[data-copy]").forEach(function(button) {
       button.addEventListener("click", function() {
         var value = button.getAttribute("data-copy");
@@ -420,7 +503,7 @@
         }
         navigator.clipboard.writeText(value).then(function() {
           var previous = button.textContent;
-          button.textContent = "Copied";
+          button.textContent = copiedLabel;
           window.setTimeout(function() {
             button.textContent = previous;
           }, 1400);

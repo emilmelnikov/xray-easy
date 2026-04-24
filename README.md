@@ -123,6 +123,8 @@ Main node `config.json`:
   "role": "main",
   "http_listen": "127.0.0.1:8080",
   "loglevel": "warning",
+  "subscription_title": "main.example.com",
+  "profile_update_interval": 24,
   "certificate": {
     "cache_dir": "certs",
     "ca_dir_url": "https://acme-v02.api.letsencrypt.org/directory"
@@ -135,8 +137,8 @@ Main node `config.json`:
   "routes": [
     {
       "id": 1234,
-      "name": "local",
-      "title": "local",
+      "name": "main",
+      "title": "main",
       "outbound": {
         "type": "freedom"
       }
@@ -165,6 +167,12 @@ For the main node steal-oneself setup, `inbound.server_name` must be a domain yo
 
 `inbound.listen` is optional and defaults to `:443`.
 
+`subscription_title` is optional and defaults to `inbound.server_name`. It is used as the `#profile-title` in subscription responses.
+
+`profile_update_interval` is optional and defaults to `24`. It is used as the Happ-compatible `#profile-update-interval` value in hours.
+
+Subscription responses include Happ-compatible metadata in the body: `#profile-update-interval`, `#profile-title`, and `#profile-web-page-url` pointing back to the user's profile page.
+
 Main nodes also listen on `certificate.http_listen` for HTTP-01 certificate challenges. `/.well-known/acme-challenge/*` is served for ACME validation; all other HTTP requests redirect to HTTPS. `certificate.http_listen` is optional and defaults to `:80`, so public TCP ports `80` and `443` must both reach the main node.
 
 Out nodes do not serve profile pages and do not manage certificates. Their `inbound.dest` is the main node public address, and `inbound.server_name` is the main node REALITY SNI.
@@ -179,7 +187,7 @@ Users live only on the main node:
       "token": "...",
       "clients": [
         {
-          "route": "local",
+          "route": "main",
           "uuid": "..."
         }
       ]

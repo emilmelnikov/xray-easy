@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/emilmelnikov/xray-easy/internal/config"
@@ -34,12 +35,22 @@ type ProfilePage struct {
 	SubscriptionURL string
 	QRCodeDataURL   template.URL
 	DeepLinks       []ProfileDeepLink
+	Lang            string
+	LanguageLinks   []ProfileLanguageLink
 	Links           []string
+	Text            profileText
 }
 
 type ProfileDeepLink struct {
 	Name string
 	URL  template.URL
+}
+
+type ProfileLanguageLink struct {
+	Code    string
+	Label   string
+	URL     string
+	Current bool
 }
 
 func NewHandler(cfg *config.Config, file *users.File) (http.Handler, error) {
@@ -99,6 +110,7 @@ func newMainHandler(cfg *config.Config, file *users.File) http.Handler {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		locale := localeFromRequest(r)
 
 		var body bytes.Buffer
 		if err := profileTemplate.Execute(&body, ProfilePage{
@@ -106,7 +118,10 @@ func newMainHandler(cfg *config.Config, file *users.File) http.Handler {
 			SubscriptionURL: subURL,
 			QRCodeDataURL:   qrDataURL,
 			DeepLinks:       profileDeepLinks(subURL, user.Username),
+			Lang:            locale.lang(),
+			LanguageLinks:   profileLanguageLinks(r.URL.Path, locale),
 			Links:           links,
+			Text:            locale.profile(),
 		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -132,15 +147,22 @@ func newMainHandler(cfg *config.Config, file *users.File) http.Handler {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		profileURL, err := link.ProfileURL(cfg, user.Token)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 
 		var body strings.Builder
-		body.WriteString("#profile-title: ")
-		body.WriteString(user.Username)
+		body.WriteString("#profile-update-interval: ")
+		body.WriteString(strconv.Itoa(profileUpdateInterval(cfg)))
 		body.WriteString("\n")
-		for i, item := range links {
-			if i > 0 {
-				body.WriteString("\n")
-			}
+		body.WriteString("#profile-title: ")
+		body.WriteString(subscriptionTitle(cfg))
+		body.WriteString("\n#profile-web-page-url: ")
+		body.WriteString(profileURL)
+		for _, item := range links {
+			body.WriteString("\n")
 			body.WriteString(item)
 		}
 
@@ -151,6 +173,20 @@ func newMainHandler(cfg *config.Config, file *users.File) http.Handler {
 		redirectToAuth(w, r)
 	})
 	return mux
+}
+
+func subscriptionTitle(cfg *config.Config) string {
+	if cfg.SubscriptionTitle != "" {
+		return cfg.SubscriptionTitle
+	}
+	return cfg.Inbound.ServerName
+}
+
+func profileUpdateInterval(cfg *config.Config) int {
+	if cfg.ProfileUpdateInterval > 0 {
+		return cfg.ProfileUpdateInterval
+	}
+	return config.DefaultProfileUpdate
 }
 
 func authHandler(w http.ResponseWriter, r *http.Request) {
@@ -214,5 +250,22 @@ func profileDeepLinks(subURL, name string) []ProfileDeepLink {
 		{Name: "FlClash", URL: template.URL("flclash://install-config?url=" + querySub)},
 		{Name: "Hiddify", URL: template.URL("hiddify://install-config/?url=" + querySub)},
 		{Name: "Happ", URL: template.URL("happ://add/" + pathSub)},
+	}
+}
+
+func profileLanguageLinks(path string, current locale) []ProfileLanguageLink {
+	return []ProfileLanguageLink{
+		{
+			Code:    "en",
+			Label:   localeEN.profile().English,
+			URL:     path + "?lang=en",
+			Current: current == localeEN,
+		},
+		{
+			Code:    "ru",
+			Label:   localeRU.profile().Russian,
+			URL:     path + "?lang=ru",
+			Current: current == localeRU,
+		},
 	}
 }

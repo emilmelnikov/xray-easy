@@ -18,9 +18,10 @@ const (
 
 func TestMainHandlerServesAuthFallback(t *testing.T) {
 	cfg := &config.Config{
-		Role:        config.RoleMain,
-		HTTPListen:  config.DefaultHTTPListen,
-		Certificate: testCertificate(),
+		Role:              config.RoleMain,
+		HTTPListen:        config.DefaultHTTPListen,
+		SubscriptionTitle: "Main VPN",
+		Certificate:       testCertificate(),
 		Inbound: config.Inbound{
 			Listen:     ":443",
 			ServerName: "main.example.com",
@@ -113,6 +114,42 @@ func TestMainHandlerServesAuthFallback(t *testing.T) {
 		}
 	})
 
+	t.Run("profile in russian", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/profile/token-1", nil)
+		req.Header.Set("Accept-Language", "ru-RU,ru;q=0.9,en;q=0.8")
+		handler.ServeHTTP(rec, req)
+		body, _ := io.ReadAll(rec.Body)
+		text := string(body)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("profile status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if !strings.Contains(text, `<html lang="ru">`) || !strings.Contains(text, "Личный профиль доступа") || !strings.Contains(text, "Скопировать ссылку") {
+			t.Fatalf("profile body = %q, want russian profile text", text)
+		}
+		if strings.Contains(text, "#ZgotmplZ") {
+			t.Fatalf("profile body contains blocked data URL marker: %q", text)
+		}
+		if !strings.Contains(text, `href="/profile/token-1?lang=en"`) || !strings.Contains(text, `href="/profile/token-1?lang=ru"`) {
+			t.Fatalf("profile body = %q, want language selection links", text)
+		}
+	})
+
+	t.Run("profile language query overrides header", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/profile/token-1?lang=en", nil)
+		req.Header.Set("Accept-Language", "ru")
+		handler.ServeHTTP(rec, req)
+		body, _ := io.ReadAll(rec.Body)
+		text := string(body)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("profile status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if !strings.Contains(text, `<html lang="en">`) || !strings.Contains(text, "Private access profile") {
+			t.Fatalf("profile body = %q, want english profile text", text)
+		}
+	})
+
 	t.Run("subscription", func(t *testing.T) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/sub/token-1", nil)
@@ -122,8 +159,51 @@ func TestMainHandlerServesAuthFallback(t *testing.T) {
 			t.Fatalf("subscription status = %d, want %d", rec.Code, http.StatusOK)
 		}
 		text := string(body)
-		if !strings.Contains(text, "#profile-title: alice") || !strings.Contains(text, "vless://") {
-			t.Fatalf("subscription body = %q, want profile header and vless link", text)
+		for _, want := range []string{
+			"#profile-update-interval: 24",
+			"#profile-title: Main VPN",
+			"#profile-web-page-url: https://main.example.com/profile/token-1",
+			"vless://",
+		} {
+			if !strings.Contains(text, want) {
+				t.Fatalf("subscription body = %q, want %q", text, want)
+			}
+		}
+	})
+
+	t.Run("subscription uses configured update interval", func(t *testing.T) {
+		original := cfg.ProfileUpdateInterval
+		cfg.ProfileUpdateInterval = 8
+		defer func() { cfg.ProfileUpdateInterval = original }()
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/sub/token-1", nil)
+		handler.ServeHTTP(rec, req)
+		body, _ := io.ReadAll(rec.Body)
+		text := string(body)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("subscription status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if !strings.Contains(text, "#profile-update-interval: 8") {
+			t.Fatalf("subscription body = %q, want configured update interval", text)
+		}
+	})
+
+	t.Run("subscription title defaults to server name", func(t *testing.T) {
+		original := cfg.SubscriptionTitle
+		cfg.SubscriptionTitle = ""
+		defer func() { cfg.SubscriptionTitle = original }()
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/sub/token-1", nil)
+		handler.ServeHTTP(rec, req)
+		body, _ := io.ReadAll(rec.Body)
+		text := string(body)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("subscription status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		if !strings.Contains(text, "#profile-title: main.example.com") {
+			t.Fatalf("subscription body = %q, want default profile title", text)
 		}
 	})
 
