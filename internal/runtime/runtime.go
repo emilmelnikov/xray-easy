@@ -21,6 +21,13 @@ type closer interface {
 	Close() error
 }
 
+const (
+	serverReadTimeout  = 60 * time.Second
+	serverWriteTimeout = 60 * time.Second
+	serverIdleTimeout  = 120 * time.Second
+	hstsHeaderValue    = "max-age=63072000; includeSubDomains"
+)
+
 func Serve(ctx context.Context, cfg *config.Config, file *users.File) error {
 	switch cfg.Role {
 	case config.RoleMain:
@@ -42,45 +49,67 @@ func serveMain(ctx context.Context, cfg *config.Config, file *users.File) error 
 	if err != nil {
 		return err
 	}
-	if err := certs.LoadOrCreateTemporary(); err != nil {
+
+	challengeServer := &http.Server{
+		Addr:         cfg.Certificate.HTTPListen,
+		Handler:      certs.HTTPHandler(),
+		ReadTimeout:  serverReadTimeout,
+		WriteTimeout: serverWriteTimeout,
+		IdleTimeout:  serverIdleTimeout,
+	}
+
+	challengeListener, err := net.Listen("tcp", cfg.Certificate.HTTPListen)
+	if err != nil {
+		return fmt.Errorf("listen on %s: %w", cfg.Certificate.HTTPListen, err)
+	}
+	challengeErr := serveHTTP(challengeServer, challengeListener)
+
+	if err := certs.Ensure(ctx); err != nil {
+		_ = challengeServer.Close()
 		return err
 	}
 
 	httpServer := &http.Server{
-		Addr:      cfg.HTTPListenAddr(),
-		Handler:   handler,
-		TLSConfig: certs.TLSConfig(),
+		Addr:         cfg.HTTPListenAddr(),
+		Handler:      hstsHandler(handler),
+		ReadTimeout:  serverReadTimeout,
+		WriteTimeout: serverWriteTimeout,
+		IdleTimeout:  serverIdleTimeout,
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS13,
+			CurvePreferences: []tls.CurveID{
+				tls.X25519MLKEM768,
+				tls.X25519,
+				tls.CurveP256,
+				tls.CurveP384,
+			},
+			NextProtos:     []string{"h2", "http/1.1"},
+			GetCertificate: certs.GetCertificate,
+		},
 	}
 	listener, err := net.Listen("tcp", cfg.HTTPListenAddr())
 	if err != nil {
+		_ = challengeServer.Close()
 		return fmt.Errorf("listen on %s: %w", cfg.HTTPListenAddr(), err)
 	}
 	tlsListener := tls.NewListener(listener, httpServer.TLSConfig)
-
-	httpErr := make(chan error, 1)
-	go func() {
-		err := httpServer.Serve(tlsListener)
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			httpErr <- err
-			return
-		}
-		httpErr <- nil
-	}()
+	httpErr := serveHTTP(httpServer, tlsListener)
 
 	instance, err := startXray(cfg, file)
 	if err != nil {
 		_ = httpServer.Close()
-		return err
-	}
-	if err := certs.Ensure(ctx); err != nil {
-		_ = httpServer.Close()
-		_ = instance.Close()
+		_ = challengeServer.Close()
 		return err
 	}
 	go certs.RenewLoop(ctx)
 
 	select {
 	case err := <-httpErr:
+		_ = challengeServer.Close()
+		_ = instance.Close()
+		return err
+	case err := <-challengeErr:
+		_ = httpServer.Close()
 		_ = instance.Close()
 		return err
 	case <-ctx.Done():
@@ -88,16 +117,40 @@ func serveMain(ctx context.Context, cfg *config.Config, file *users.File) error 
 		defer cancel()
 
 		httpShutdownErr := httpServer.Shutdown(shutdownCtx)
+		challengeShutdownErr := challengeServer.Shutdown(shutdownCtx)
 		xrayCloseErr := instance.Close()
 
 		if httpShutdownErr != nil {
 			return httpShutdownErr
+		}
+		if challengeShutdownErr != nil {
+			return challengeShutdownErr
 		}
 		if xrayCloseErr != nil {
 			return xrayCloseErr
 		}
 		return nil
 	}
+}
+
+func serveHTTP(server *http.Server, listener net.Listener) <-chan error {
+	errc := make(chan error, 1)
+	go func() {
+		err := server.Serve(listener)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errc <- err
+			return
+		}
+		errc <- nil
+	}()
+	return errc
+}
+
+func hstsHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Strict-Transport-Security", hstsHeaderValue)
+		next.ServeHTTP(w, r)
+	})
 }
 
 func serveOut(ctx context.Context, cfg *config.Config) error {

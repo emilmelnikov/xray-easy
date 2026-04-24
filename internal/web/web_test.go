@@ -178,7 +178,8 @@ func TestOutHandlerServesAuthFallback(t *testing.T) {
 
 func testCertificate() config.Certificate {
 	return config.Certificate{
-		CacheDir: config.DefaultCertCache,
-		CADirURL: config.DefaultCADirURL,
+		HTTPListen: config.DefaultCertHTTPListen,
+		CacheDir:   config.DefaultCertCache,
+		CADirURL:   config.DefaultCADirURL,
 	}
 }

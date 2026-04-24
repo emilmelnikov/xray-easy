@@ -88,9 +88,10 @@ func runInitConfig(args []string, entropy io.Reader) error {
 
 	outputPath := fs.String("output", "config.json", "main config output path")
 	usersPath := fs.String("users-output", "", "users output path")
-	listen := fs.String("listen", ":443", "public vless listen address")
+	listen := fs.String("listen", config.DefaultInboundListen, "public vless listen address")
 	serverName := fs.String("server-name", "", "public hostname and reality server name")
 	httpListen := fs.String("http-listen", config.DefaultHTTPListen, "local http listen address")
+	certHTTPListen := fs.String("cert-http-listen", config.DefaultCertHTTPListen, "public HTTP-01 listen address")
 	certCache := fs.String("cert-cache", config.DefaultCertCache, "certificate cache directory")
 	caDirURL := fs.String("ca-dir-url", config.DefaultCADirURL, "ACME directory URL")
 	if err := fs.Parse(args); err != nil {
@@ -117,8 +118,9 @@ func runInitConfig(args []string, entropy io.Reader) error {
 		Role:       config.RoleMain,
 		HTTPListen: *httpListen,
 		Certificate: config.Certificate{
-			CacheDir: *certCache,
-			CADirURL: *caDirURL,
+			HTTPListen: *certHTTPListen,
+			CacheDir:   *certCache,
+			CADirURL:   *caDirURL,
 		},
 		Inbound: config.Inbound{
 			Listen:     *listen,
@@ -228,7 +230,7 @@ func runAddRoute(args []string, stdout io.Writer, entropy io.Reader) error {
 	address := fs.String("address", "", "relay node address for the main node")
 	port := fs.Int("port", 0, "relay node port for the main node")
 	title := fs.String("title", "", "route title")
-	listen := fs.String("listen", ":443", "out node public vless listen address")
+	listen := fs.String("listen", config.DefaultInboundListen, "out node public vless listen address")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

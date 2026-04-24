@@ -15,7 +15,6 @@ Initialize a new main node:
 xray-easy init-config \
   -output config.json \
   -users-output users.json \
-  -listen :443 \
   -server-name main.example.com
 ```
 
@@ -129,7 +128,6 @@ Main node `config.json`:
     "ca_dir_url": "https://acme-v02.api.letsencrypt.org/directory"
   },
   "inbound": {
-    "listen": ":443",
     "server_name": "main.example.com",
     "private_key": "...",
     "short_id": "..."
@@ -154,7 +152,6 @@ Out node `config.json`:
   "role": "out",
   "loglevel": "warning",
   "inbound": {
-    "listen": ":443",
     "server_name": "main.example.com",
     "dest": "main.example.com:443",
     "private_key": "...",
@@ -165,6 +162,10 @@ Out node `config.json`:
 ```
 
 For the main node steal-oneself setup, `inbound.server_name` must be a domain you control that reaches the main node's public `:443`. The same value is used for REALITY SNI, generated profile URLs, and the managed certificate.
+
+`inbound.listen` is optional and defaults to `:443`.
+
+Main nodes also listen on `certificate.http_listen` for HTTP-01 certificate challenges. `/.well-known/acme-challenge/*` is served for ACME validation; all other HTTP requests redirect to HTTPS. `certificate.http_listen` is optional and defaults to `:80`, so public TCP ports `80` and `443` must both reach the main node.
 
 Out nodes do not serve profile pages and do not manage certificates. Their `inbound.dest` is the main node public address, and `inbound.server_name` is the main node REALITY SNI.
 

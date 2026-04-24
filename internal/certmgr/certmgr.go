@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,7 @@ import (
 	"github.com/go-acme/lego/v4/acme/api"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
-	"github.com/go-acme/lego/v4/challenge/tlsalpn01"
+	"github.com/go-acme/lego/v4/challenge/http01"
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/go-acme/lego/v4/registration"
 )
@@ -40,7 +41,7 @@ type Manager struct {
 	domain string
 	cfg    config.Certificate
 
-	challenges *alpnProvider
+	challenges *httpProvider
 
 	mu        sync.RWMutex
 	cert      *tls.Certificate
@@ -102,7 +103,7 @@ func New(domain string, cfg config.Certificate) (*Manager, error) {
 	return &Manager{
 		domain:     domain,
 		cfg:        cfg,
-		challenges: newALPNProvider(),
+		challenges: newHTTPProvider(domain),
 	}, nil
 }
 
@@ -129,25 +130,7 @@ func (m *Manager) LoadOrCreateTemporary() error {
 	return nil
 }
 
-func (m *Manager) TLSConfig() *tls.Config {
-	return &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		NextProtos: []string{
-			tlsalpn01.ACMETLS1Protocol,
-			"h2",
-			"http/1.1",
-		},
-		GetCertificate: m.GetCertificate,
-	}
-}
-
 func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-	if hasALPN(hello.SupportedProtos, tlsalpn01.ACMETLS1Protocol) {
-		if cert := m.challenges.Get(hello.ServerName); cert != nil {
-			return cert, nil
-		}
-	}
-
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.cert == nil {
@@ -156,15 +139,30 @@ func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, 
 	return m.cert, nil
 }
 
+func (m *Manager) HTTPHandler() http.Handler {
+	return m.challenges
+}
+
 func (m *Manager) Ensure(ctx context.Context) error {
 	_ = ctx
 
 	m.mu.RLock()
+	hasCert := len(m.certPEM) != 0
 	needsCert := needsRenewal(m.certPEM, renewBefore)
 	m.mu.RUnlock()
-	if !needsCert {
+	if hasCert && !needsCert {
 		if _, err := m.loadResource(); err == nil {
 			return nil
+		}
+	}
+
+	if !hasCert {
+		if err := m.loadCertificate(); err == nil {
+			if !needsRenewal(m.currentCertPEM(), renewBefore) {
+				return nil
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
 		}
 	}
 
@@ -332,7 +330,7 @@ func (m *Manager) client() (*lego.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := client.Challenge.SetTLSALPN01Provider(m.challenges, tlsalpn01.SetDelay(2*time.Second)); err != nil {
+	if err := client.Challenge.SetHTTP01Provider(m.challenges, http01.SetDelay(2*time.Second)); err != nil {
 		return nil, err
 	}
 
@@ -641,15 +639,6 @@ func sleepContext(ctx context.Context, delay time.Duration) bool {
 	case <-ctx.Done():
 		return false
 	}
-}
-
-func hasALPN(protos []string, want string) bool {
-	for _, proto := range protos {
-		if proto == want {
-			return true
-		}
-	}
-	return false
 }
 
 func temporaryCertificate(domain string) ([]byte, []byte, error) {

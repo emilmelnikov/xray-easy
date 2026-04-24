@@ -22,10 +22,12 @@ const (
 	OutboundTypeFreedom = "freedom"
 	OutboundTypeRelay   = "relay"
 
-	DefaultHTTPListen = "127.0.0.1:8080"
-	DefaultCertCache  = "certs"
-	DefaultCADirURL   = "https://acme-v02.api.letsencrypt.org/directory"
-	DefaultLogLevel   = "warning"
+	DefaultInboundListen  = ":443"
+	DefaultHTTPListen     = "127.0.0.1:8080"
+	DefaultCertHTTPListen = ":80"
+	DefaultCertCache      = "certs"
+	DefaultCADirURL       = "https://acme-v02.api.letsencrypt.org/directory"
+	DefaultLogLevel       = "warning"
 )
 
 type Config struct {
@@ -38,12 +40,13 @@ type Config struct {
 }
 
 type Certificate struct {
-	CacheDir string `json:"cache_dir,omitempty"`
-	CADirURL string `json:"ca_dir_url,omitempty"`
+	HTTPListen string `json:"http_listen,omitempty"`
+	CacheDir   string `json:"cache_dir,omitempty"`
+	CADirURL   string `json:"ca_dir_url,omitempty"`
 }
 
 type Inbound struct {
-	Listen     string `json:"listen"`
+	Listen     string `json:"listen,omitempty"`
 	ServerName string `json:"server_name"`
 	Dest       string `json:"dest,omitempty"`
 	PrivateKey string `json:"private_key"`
@@ -109,6 +112,9 @@ func Save(path string, cfg *Config) error {
 }
 
 func (c *Config) Normalize() {
+	if c.Inbound.Listen == "" {
+		c.Inbound.Listen = DefaultInboundListen
+	}
 	if c.Role != RoleOut && c.HTTPListen == "" {
 		c.HTTPListen = DefaultHTTPListen
 	}
@@ -117,6 +123,9 @@ func (c *Config) Normalize() {
 	}
 	if c.Role != RoleOut && c.Certificate.CacheDir == "" {
 		c.Certificate.CacheDir = DefaultCertCache
+	}
+	if c.Role != RoleOut && c.Certificate.HTTPListen == "" {
+		c.Certificate.HTTPListen = DefaultCertHTTPListen
 	}
 	if c.Role != RoleOut && c.Certificate.CADirURL == "" {
 		c.Certificate.CADirURL = DefaultCADirURL
@@ -191,6 +200,9 @@ func (c *Config) Validate() error {
 }
 
 func (c Certificate) validate() error {
+	if err := validateListen(c.HTTPListen, "certificate.http_listen"); err != nil {
+		return err
+	}
 	if c.CacheDir == "" {
 		return errors.New("certificate.cache_dir is required")
 	}

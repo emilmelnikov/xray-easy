@@ -165,11 +165,38 @@ func TestNormalizeDefaultsLogLevel(t *testing.T) {
 	}
 }
 
+func TestValidateDefaultsOptionalListenFields(t *testing.T) {
+	cfg := &Config{
+		Role: RoleMain,
+		Certificate: Certificate{
+			CacheDir: DefaultCertCache,
+			CADirURL: DefaultCADirURL,
+		},
+		Inbound: Inbound{
+			ServerName: "main.example.com",
+			PrivateKey: testPrivateKey,
+			ShortID:    testShortID,
+		},
+		Routes: []RouteEntry{
+			{ID: 1, Name: "local", Title: "local", Outbound: Outbound{Type: OutboundTypeFreedom}},
+		},
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if cfg.Inbound.Listen != DefaultInboundListen {
+		t.Fatalf("Inbound.Listen = %q, want %q", cfg.Inbound.Listen, DefaultInboundListen)
+	}
+	if cfg.Certificate.HTTPListen != DefaultCertHTTPListen {
+		t.Fatalf("Certificate.HTTPListen = %q, want %q", cfg.Certificate.HTTPListen, DefaultCertHTTPListen)
+	}
+}
+
 func TestValidateOutConfigDoesNotRequireHTTPOrCertificate(t *testing.T) {
 	cfg := &Config{
 		Role: RoleOut,
 		Inbound: Inbound{
-			Listen:     ":443",
 			ServerName: "main.example.com",
 			Dest:       "main.example.com:443",
 			PrivateKey: testPrivateKey,
@@ -183,6 +210,9 @@ func TestValidateOutConfigDoesNotRequireHTTPOrCertificate(t *testing.T) {
 	}
 	if cfg.HTTPListen != "" {
 		t.Fatalf("HTTPListen = %q, want empty for out config", cfg.HTTPListen)
+	}
+	if cfg.Inbound.Listen != DefaultInboundListen {
+		t.Fatalf("Inbound.Listen = %q, want %q", cfg.Inbound.Listen, DefaultInboundListen)
 	}
 	if cfg.Certificate != (Certificate{}) {
 		t.Fatalf("Certificate = %+v, want empty for out config", cfg.Certificate)
@@ -210,7 +240,8 @@ func TestValidateLogLevel(t *testing.T) {
 
 func testCertificate() Certificate {
 	return Certificate{
-		CacheDir: DefaultCertCache,
-		CADirURL: DefaultCADirURL,
+		HTTPListen: DefaultCertHTTPListen,
+		CacheDir:   DefaultCertCache,
+		CADirURL:   DefaultCADirURL,
 	}
 }
