@@ -91,9 +91,10 @@ func BuildJSON(cfg *config.Config, file *users.File) ([]byte, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
+	cfg.Normalize()
 
 	root := rootConfig{
-		Log: logConfig{LogLevel: "warning"},
+		Log: logConfig{LogLevel: cfg.LogLevel},
 	}
 
 	switch cfg.Role {
@@ -127,14 +128,9 @@ func buildMain(cfg *config.Config, file *users.File) (rootConfig, error) {
 	if err != nil {
 		return rootConfig{}, err
 	}
-	httpHost, httpPort, err := splitListen(cfg.HTTPListenAddr())
+	dest, err := localTarget(cfg.HTTPListenAddr())
 	if err != nil {
 		return rootConfig{}, err
-	}
-
-	dest := net.JoinHostPort(httpHost, fmt.Sprintf("%d", httpPort))
-	if httpHost == "" {
-		dest = fmt.Sprintf("localhost:%d", httpPort)
 	}
 
 	clients := make([]clientSettings, 0, len(file.Users)*len(cfg.Routes))
@@ -198,15 +194,6 @@ func buildOut(cfg *config.Config) (rootConfig, error) {
 	if err != nil {
 		return rootConfig{}, err
 	}
-	httpHost, httpPort, err := splitListen(cfg.HTTPListenAddr())
-	if err != nil {
-		return rootConfig{}, err
-	}
-
-	dest := net.JoinHostPort(httpHost, fmt.Sprintf("%d", httpPort))
-	if httpHost == "" {
-		dest = fmt.Sprintf("localhost:%d", httpPort)
-	}
 
 	return rootConfig{
 		Inbounds: []inbound{
@@ -229,7 +216,7 @@ func buildOut(cfg *config.Config) (rootConfig, error) {
 					Network:  "tcp",
 					Security: "reality",
 					RealitySettings: realityConfig{
-						Dest:        dest,
+						Dest:        cfg.Inbound.Dest,
 						ServerNames: []string{cfg.Inbound.ServerName},
 						PrivateKey:  cfg.Inbound.PrivateKey,
 						ShortIDs:    []string{cfg.Inbound.ShortID},
@@ -293,6 +280,17 @@ func routeOutbound(route config.RouteEntry) (outbound, error) {
 	default:
 		return outbound{}, fmt.Errorf("unsupported outbound type %q", route.Outbound.Type)
 	}
+}
+
+func localTarget(value string) (string, error) {
+	host, port, err := splitListen(value)
+	if err != nil {
+		return "", err
+	}
+	if host == "" {
+		return fmt.Sprintf("localhost:%d", port), nil
+	}
+	return net.JoinHostPort(host, fmt.Sprintf("%d", port)), nil
 }
 
 func splitListen(value string) (string, int, error) {

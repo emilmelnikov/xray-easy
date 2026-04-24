@@ -133,16 +133,16 @@ var authTemplate = template.Must(template.New("auth").Parse(`<!doctype html>
 </html>
 `))
 
+type authPage struct {
+	Email string
+	Error string
+}
+
 type ProfilePage struct {
 	Username        string
 	SubscriptionURL string
 	QRCodeDataURL   template.URL
 	Links           []string
-}
-
-type authPage struct {
-	Email string
-	Error string
 }
 
 func NewHandler(cfg *config.Config, file *users.File) (http.Handler, error) {

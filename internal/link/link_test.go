@@ -15,12 +15,12 @@ const (
 
 func TestUserLinksFollowConfigOrder(t *testing.T) {
 	cfg := &config.Config{
-		Role:       config.RoleMain,
-		HTTPListen: config.DefaultHTTPListen,
+		Role:        config.RoleMain,
+		HTTPListen:  config.DefaultHTTPListen,
+		Certificate: testCertificate(),
 		Inbound: config.Inbound{
 			Listen:     ":8443",
-			PublicHost: "main.example.com",
-			ServerName: "www.cloudflare.com",
+			ServerName: "main.example.com",
 			PrivateKey: testPrivateKey,
 			ShortID:    testShortID,
 		},
@@ -58,10 +58,11 @@ func TestUserLinksFollowConfigOrder(t *testing.T) {
 
 func TestProfileURLOmitsDefaultPort(t *testing.T) {
 	cfg := &config.Config{
-		Role: config.RoleMain,
+		Role:        config.RoleMain,
+		Certificate: testCertificate(),
 		Inbound: config.Inbound{
 			Listen:     ":443",
-			PublicHost: "main.example.com",
+			ServerName: "main.example.com",
 		},
 	}
 
@@ -72,5 +73,12 @@ func TestProfileURLOmitsDefaultPort(t *testing.T) {
 	want := "https://main.example.com/profile/token-1"
 	if got != want {
 		t.Fatalf("ProfileURL() = %q, want %q", got, want)
+	}
+}
+
+func testCertificate() config.Certificate {
+	return config.Certificate{
+		CacheDir: config.DefaultCertCache,
+		CADirURL: config.DefaultCADirURL,
 	}
 }

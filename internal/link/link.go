@@ -39,7 +39,7 @@ func UserLinks(cfg *config.Config, user users.User) ([]string, error) {
 		u := url.URL{
 			Scheme:   "vless",
 			User:     url.User(client.UUID),
-			Host:     net.JoinHostPort(cfg.Inbound.PublicHost, port),
+			Host:     net.JoinHostPort(cfg.Inbound.ServerName, port),
 			Path:     "",
 			Fragment: fmt.Sprintf("%s %s", user.Username, route.DisplayTitle()),
 		}
@@ -67,7 +67,7 @@ func absoluteURL(cfg *config.Config, path string) (string, error) {
 		return "", err
 	}
 
-	host := cfg.Inbound.PublicHost
+	host := cfg.Inbound.ServerName
 	if port != 443 {
 		host = net.JoinHostPort(host, strconv.Itoa(port))
 	}

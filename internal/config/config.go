@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/emilmelnikov/xray-easy/internal/uuidroute"
@@ -22,19 +23,29 @@ const (
 	OutboundTypeRelay   = "relay"
 
 	DefaultHTTPListen = "127.0.0.1:8080"
+	DefaultCertCache  = "certs"
+	DefaultCADirURL   = "https://acme-v02.api.letsencrypt.org/directory"
+	DefaultLogLevel   = "warning"
 )
 
 type Config struct {
-	Role       string       `json:"role"`
-	HTTPListen string       `json:"http_listen,omitempty"`
-	Inbound    Inbound      `json:"inbound"`
-	Routes     []RouteEntry `json:"routes,omitempty"`
+	Role        string       `json:"role"`
+	HTTPListen  string       `json:"http_listen,omitempty"`
+	LogLevel    string       `json:"loglevel,omitempty"`
+	Certificate Certificate  `json:"certificate,omitempty"`
+	Inbound     Inbound      `json:"inbound"`
+	Routes      []RouteEntry `json:"routes,omitempty"`
+}
+
+type Certificate struct {
+	CacheDir string `json:"cache_dir,omitempty"`
+	CADirURL string `json:"ca_dir_url,omitempty"`
 }
 
 type Inbound struct {
 	Listen     string `json:"listen"`
-	PublicHost string `json:"public_host,omitempty"`
 	ServerName string `json:"server_name"`
+	Dest       string `json:"dest,omitempty"`
 	PrivateKey string `json:"private_key"`
 	ShortID    string `json:"short_id"`
 	RelayUUID  string `json:"relay_uuid,omitempty"`
@@ -98,8 +109,17 @@ func Save(path string, cfg *Config) error {
 }
 
 func (c *Config) Normalize() {
-	if c.HTTPListen == "" {
+	if c.Role != RoleOut && c.HTTPListen == "" {
 		c.HTTPListen = DefaultHTTPListen
+	}
+	if c.LogLevel == "" {
+		c.LogLevel = DefaultLogLevel
+	}
+	if c.Role != RoleOut && c.Certificate.CacheDir == "" {
+		c.Certificate.CacheDir = DefaultCertCache
+	}
+	if c.Role != RoleOut && c.Certificate.CADirURL == "" {
+		c.Certificate.CADirURL = DefaultCADirURL
 	}
 	for i := range c.Routes {
 		if c.Routes[i].Title == "" {
@@ -112,10 +132,11 @@ func (c *Config) Validate() error {
 	if c == nil {
 		return errors.New("config is nil")
 	}
+	c.Normalize()
 	if c.Role != RoleMain && c.Role != RoleOut {
 		return fmt.Errorf("invalid config role %q", c.Role)
 	}
-	if err := validateListen(c.HTTPListen, "http_listen"); err != nil {
+	if err := validateLogLevel(c.LogLevel); err != nil {
 		return err
 	}
 	if err := c.Inbound.validate(c.Role); err != nil {
@@ -124,8 +145,11 @@ func (c *Config) Validate() error {
 
 	switch c.Role {
 	case RoleMain:
-		if c.Inbound.PublicHost == "" {
-			return errors.New("main config inbound.public_host is required")
+		if err := validateListen(c.HTTPListen, "http_listen"); err != nil {
+			return err
+		}
+		if err := c.Certificate.validate(); err != nil {
+			return err
 		}
 		if len(c.Routes) == 0 {
 			return errors.New("main config requires at least one route")
@@ -161,11 +185,18 @@ func (c *Config) Validate() error {
 		if _, err := uuidroute.Parse(c.Inbound.RelayUUID); err != nil {
 			return fmt.Errorf("out config inbound.relay_uuid is invalid: %w", err)
 		}
-		if c.Inbound.PublicHost != "" {
-			return errors.New("out config inbound.public_host must be empty")
-		}
 	}
 
+	return nil
+}
+
+func (c Certificate) validate() error {
+	if c.CacheDir == "" {
+		return errors.New("certificate.cache_dir is required")
+	}
+	if c.CADirURL == "" {
+		return errors.New("certificate.ca_dir_url is required")
+	}
 	return nil
 }
 
@@ -176,6 +207,14 @@ func (i Inbound) validate(role string) error {
 	if i.ServerName == "" {
 		return errors.New("inbound.server_name is required")
 	}
+	if role == RoleOut {
+		if i.Dest == "" {
+			return errors.New("out config inbound.dest is required")
+		}
+		if err := validateAddress(i.Dest, "inbound.dest"); err != nil {
+			return err
+		}
+	}
 	if err := validateBase64Key(i.PrivateKey, 32, "inbound.private_key"); err != nil {
 		return err
 	}
@@ -183,6 +222,9 @@ func (i Inbound) validate(role string) error {
 		return err
 	}
 	if role == RoleMain {
+		if i.Dest != "" {
+			return errors.New("main config inbound.dest must be empty")
+		}
 		if i.RelayUUID != "" {
 			return errors.New("main config inbound.relay_uuid must be empty")
 		}
@@ -251,6 +293,14 @@ func (c *Config) ListenPort() (int, error) {
 	return port, err
 }
 
+func (c *Config) PublicInboundAddress() (string, error) {
+	port, err := c.ListenPort()
+	if err != nil {
+		return "", err
+	}
+	return net.JoinHostPort(c.Inbound.ServerName, strconv.Itoa(port)), nil
+}
+
 func (c *Config) HTTPListenAddr() string {
 	if c.HTTPListen == "" {
 		return DefaultHTTPListen
@@ -262,6 +312,17 @@ func validateListen(value, field string) error {
 	_, _, err := splitHostPort(value)
 	if err != nil {
 		return fmt.Errorf("%s: %w", field, err)
+	}
+	return nil
+}
+
+func validateAddress(value, field string) error {
+	host, _, err := splitHostPort(value)
+	if err != nil {
+		return fmt.Errorf("%s: %w", field, err)
+	}
+	if host == "" {
+		return fmt.Errorf("%s: host is required", field)
 	}
 	return nil
 }
@@ -300,4 +361,13 @@ func validateShortID(value, field string) error {
 		return fmt.Errorf("%s is invalid", field)
 	}
 	return nil
+}
+
+func validateLogLevel(value string) error {
+	switch value {
+	case "debug", "info", "warning", "error", "none":
+		return nil
+	default:
+		return fmt.Errorf("loglevel %q is invalid", value)
+	}
 }

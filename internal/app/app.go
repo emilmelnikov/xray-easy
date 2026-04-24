@@ -89,14 +89,12 @@ func runInitConfig(args []string, entropy io.Reader) error {
 	outputPath := fs.String("output", "config.json", "main config output path")
 	usersPath := fs.String("users-output", "", "users output path")
 	listen := fs.String("listen", ":443", "public vless listen address")
-	publicHost := fs.String("public-host", "", "public hostname for vless links")
-	serverName := fs.String("server-name", "", "reality server name")
+	serverName := fs.String("server-name", "", "public hostname and reality server name")
 	httpListen := fs.String("http-listen", config.DefaultHTTPListen, "local http listen address")
+	certCache := fs.String("cert-cache", config.DefaultCertCache, "certificate cache directory")
+	caDirURL := fs.String("ca-dir-url", config.DefaultCADirURL, "ACME directory URL")
 	if err := fs.Parse(args); err != nil {
 		return err
-	}
-	if *publicHost == "" {
-		return errors.New("-public-host is required")
 	}
 	if *serverName == "" {
 		return errors.New("-server-name is required")
@@ -118,9 +116,12 @@ func runInitConfig(args []string, entropy io.Reader) error {
 	cfg := &config.Config{
 		Role:       config.RoleMain,
 		HTTPListen: *httpListen,
+		Certificate: config.Certificate{
+			CacheDir: *certCache,
+			CADirURL: *caDirURL,
+		},
 		Inbound: config.Inbound{
 			Listen:     *listen,
-			PublicHost: *publicHost,
 			ServerName: *serverName,
 			PrivateKey: privateKey,
 			ShortID:    shortID,
@@ -226,15 +227,13 @@ func runAddRoute(args []string, stdout io.Writer, entropy io.Reader) error {
 	usersPath := fs.String("users", "", "users file path")
 	address := fs.String("address", "", "relay node address for the main node")
 	port := fs.Int("port", 0, "relay node port for the main node")
-	serverName := fs.String("server-name", "", "reality server name for the out node")
 	title := fs.String("title", "", "route title")
 	listen := fs.String("listen", ":443", "out node public vless listen address")
-	httpListen := fs.String("http-listen", config.DefaultHTTPListen, "out node local http listen address")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return errors.New("usage: xray-easy add-route -config config.json -users users.json <route-name> -address relay.example.com -port 443 -server-name www.cloudflare.com")
+		return errors.New("usage: xray-easy add-route -config config.json -users users.json <route-name> -address relay.example.com -port 443")
 	}
 
 	routeName := strings.TrimSpace(fs.Arg(0))
@@ -246,9 +245,6 @@ func runAddRoute(args []string, stdout io.Writer, entropy io.Reader) error {
 	}
 	if *port < 1 || *port > 65535 {
 		return errors.New("-port must be between 1 and 65535")
-	}
-	if *serverName == "" {
-		return errors.New("-server-name is required")
 	}
 
 	cfg, err := config.Load(*configPath)
@@ -269,6 +265,10 @@ func runAddRoute(args []string, stdout io.Writer, entropy io.Reader) error {
 	}
 	if _, ok := cfg.RouteByName(routeName); ok {
 		return fmt.Errorf("route %q already exists", routeName)
+	}
+	mainDest, err := cfg.PublicInboundAddress()
+	if err != nil {
+		return err
 	}
 
 	routeID, err := secret.GenerateRouteID(cfg.RouteIDs(), entropy)
@@ -301,7 +301,7 @@ func runAddRoute(args []string, stdout io.Writer, entropy io.Reader) error {
 			Type:       config.OutboundTypeRelay,
 			Address:    *address,
 			Port:       *port,
-			ServerName: *serverName,
+			ServerName: cfg.Inbound.ServerName,
 			PublicKey:  publicKey,
 			ShortID:    shortID,
 			UUID:       relayUUID,
@@ -327,15 +327,20 @@ func runAddRoute(args []string, stdout io.Writer, entropy io.Reader) error {
 	}
 
 	outConfig := &config.Config{
-		Role:       config.RoleOut,
-		HTTPListen: *httpListen,
+		Role:     config.RoleOut,
+		LogLevel: cfg.LogLevel,
 		Inbound: config.Inbound{
 			Listen:     *listen,
-			ServerName: *serverName,
+			ServerName: cfg.Inbound.ServerName,
+			Dest:       mainDest,
 			PrivateKey: privateKey,
 			ShortID:    shortID,
 			RelayUUID:  relayUUID,
 		},
+	}
+	outConfig.Normalize()
+	if err := outConfig.Validate(); err != nil {
+		return err
 	}
 	data, err := json.MarshalIndent(outConfig, "", "  ")
 	if err != nil {

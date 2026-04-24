@@ -16,14 +16,14 @@ const (
 	testShortID    = "0123456789abcdef"
 )
 
-func TestMainHandlerServesProfileAndSubscription(t *testing.T) {
+func TestMainHandlerServesAuthFallback(t *testing.T) {
 	cfg := &config.Config{
-		Role:       config.RoleMain,
-		HTTPListen: config.DefaultHTTPListen,
+		Role:        config.RoleMain,
+		HTTPListen:  config.DefaultHTTPListen,
+		Certificate: testCertificate(),
 		Inbound: config.Inbound{
 			Listen:     ":443",
-			PublicHost: "main.example.com",
-			ServerName: "www.cloudflare.com",
+			ServerName: "main.example.com",
 			PrivateKey: testPrivateKey,
 			ShortID:    testShortID,
 		},
@@ -137,11 +137,12 @@ func TestMainHandlerServesProfileAndSubscription(t *testing.T) {
 
 func TestOutHandlerServesAuthFallback(t *testing.T) {
 	cfg := &config.Config{
-		Role:       config.RoleOut,
-		HTTPListen: config.DefaultHTTPListen,
+		Role:        config.RoleOut,
+		HTTPListen:  config.DefaultHTTPListen,
+		Certificate: testCertificate(),
 		Inbound: config.Inbound{
 			Listen:     ":443",
-			ServerName: "www.cloudflare.com",
+			ServerName: "relay.example.com",
 			PrivateKey: testPrivateKey,
 			ShortID:    testShortID,
 			RelayUUID:  "aaaaaaaa-bbbb-0001-dddd-eeeeeeeeeeee",
@@ -172,5 +173,12 @@ func TestOutHandlerServesAuthFallback(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(string(body)), "xray") {
 		t.Fatalf("out auth body exposes xray: %q", string(body))
+	}
+}
+
+func testCertificate() config.Certificate {
+	return config.Certificate{
+		CacheDir: config.DefaultCertCache,
+		CADirURL: config.DefaultCADirURL,
 	}
 }

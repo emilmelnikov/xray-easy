@@ -29,8 +29,7 @@ func TestRunInitConfig(t *testing.T) {
 	err := run([]string{
 		"init-config",
 		"-output", configPath,
-		"-public-host", "main.example.com",
-		"-server-name", "www.cloudflare.com",
+		"-server-name", "main.example.com",
 	}, &stdout, &stderr, entropy)
 	if err != nil {
 		t.Fatalf("run(init-config) error = %v, stderr = %q", err, stderr.String())
@@ -59,12 +58,12 @@ func TestRunAddUser(t *testing.T) {
 	usersPath := filepath.Join(dir, "users.json")
 
 	cfg := &config.Config{
-		Role:       config.RoleMain,
-		HTTPListen: config.DefaultHTTPListen,
+		Role:        config.RoleMain,
+		HTTPListen:  config.DefaultHTTPListen,
+		Certificate: testCertificate(),
 		Inbound: config.Inbound{
 			Listen:     ":443",
-			PublicHost: "main.example.com",
-			ServerName: "www.cloudflare.com",
+			ServerName: "main.example.com",
 			PrivateKey: testPrivateKey,
 			ShortID:    testShortID,
 		},
@@ -119,12 +118,12 @@ func TestRunAddRoute(t *testing.T) {
 	usersPath := filepath.Join(dir, "users.json")
 
 	cfg := &config.Config{
-		Role:       config.RoleMain,
-		HTTPListen: config.DefaultHTTPListen,
+		Role:        config.RoleMain,
+		HTTPListen:  config.DefaultHTTPListen,
+		Certificate: testCertificate(),
 		Inbound: config.Inbound{
 			Listen:     ":443",
-			PublicHost: "main.example.com",
-			ServerName: "www.cloudflare.com",
+			ServerName: "main.example.com",
 			PrivateKey: testPrivateKey,
 			ShortID:    testShortID,
 		},
@@ -171,7 +170,6 @@ func TestRunAddRoute(t *testing.T) {
 		"-users", usersPath,
 		"-address", "relay.example.com",
 		"-port", "443",
-		"-server-name", "www.cloudflare.com",
 		"relay",
 	}, &stdout, &stderr, entropy)
 	if err != nil {
@@ -207,8 +205,30 @@ func TestRunAddRoute(t *testing.T) {
 	if outConfig.Inbound.RelayUUID != updatedConfig.Routes[1].Outbound.UUID {
 		t.Fatalf("outConfig relay UUID = %q, want %q", outConfig.Inbound.RelayUUID, updatedConfig.Routes[1].Outbound.UUID)
 	}
+	if outConfig.Inbound.ServerName != "main.example.com" {
+		t.Fatalf("outConfig server name = %q, want main.example.com", outConfig.Inbound.ServerName)
+	}
+	if outConfig.Inbound.Dest != "main.example.com:443" {
+		t.Fatalf("outConfig dest = %q, want main.example.com:443", outConfig.Inbound.Dest)
+	}
+	if outConfig.HTTPListen != "" {
+		t.Fatalf("outConfig HTTPListen = %q, want empty", outConfig.HTTPListen)
+	}
+	if outConfig.Certificate != (config.Certificate{}) {
+		t.Fatalf("outConfig Certificate = %+v, want empty", outConfig.Certificate)
+	}
+	if updatedConfig.Routes[1].Outbound.ServerName != "main.example.com" {
+		t.Fatalf("relay route server name = %q, want main.example.com", updatedConfig.Routes[1].Outbound.ServerName)
+	}
 
 	if _, err := os.Stat(configPath); err != nil {
 		t.Fatalf("config file stat error = %v", err)
+	}
+}
+
+func testCertificate() config.Certificate {
+	return config.Certificate{
+		CacheDir: config.DefaultCertCache,
+		CADirURL: config.DefaultCADirURL,
 	}
 }

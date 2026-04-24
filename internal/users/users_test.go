@@ -13,12 +13,12 @@ const (
 
 func TestValidateRequiresOneClientPerRoute(t *testing.T) {
 	cfg := &config.Config{
-		Role:       config.RoleMain,
-		HTTPListen: config.DefaultHTTPListen,
+		Role:        config.RoleMain,
+		HTTPListen:  config.DefaultHTTPListen,
+		Certificate: testCertificate(),
 		Inbound: config.Inbound{
 			Listen:     ":443",
-			PublicHost: "main.example.com",
-			ServerName: "www.cloudflare.com",
+			ServerName: "main.example.com",
 			PrivateKey: testPrivateKey,
 			ShortID:    testShortID,
 		},
@@ -46,12 +46,12 @@ func TestValidateRequiresOneClientPerRoute(t *testing.T) {
 
 func TestValidateRejectsMismatchedUUIDRouteID(t *testing.T) {
 	cfg := &config.Config{
-		Role:       config.RoleMain,
-		HTTPListen: config.DefaultHTTPListen,
+		Role:        config.RoleMain,
+		HTTPListen:  config.DefaultHTTPListen,
+		Certificate: testCertificate(),
 		Inbound: config.Inbound{
 			Listen:     ":443",
-			PublicHost: "main.example.com",
-			ServerName: "www.cloudflare.com",
+			ServerName: "main.example.com",
 			PrivateKey: testPrivateKey,
 			ShortID:    testShortID,
 		},
@@ -73,5 +73,12 @@ func TestValidateRejectsMismatchedUUIDRouteID(t *testing.T) {
 
 	if err := file.Validate(cfg); err == nil {
 		t.Fatal("Validate() error = nil, want mismatched route id error")
+	}
+}
+
+func testCertificate() config.Certificate {
+	return config.Certificate{
+		CacheDir: config.DefaultCertCache,
+		CADirURL: config.DefaultCADirURL,
 	}
 }

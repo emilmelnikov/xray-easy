@@ -5,7 +5,7 @@
 - one main node with one public VLESS + REALITY + Vision inbound
 - optional out nodes that accept relay traffic from the main node
 - user data stored only on the main node in `users.json`
-- per-user profile and subscription pages served through the REALITY fallback HTTP target
+- per-user profile and subscription pages served through the REALITY fallback HTTPS target
 
 ## Commands
 
@@ -16,8 +16,7 @@ xray-easy init-config \
   -output config.json \
   -users-output users.json \
   -listen :443 \
-  -public-host main.example.com \
-  -server-name www.cloudflare.com
+  -server-name main.example.com
 ```
 
 Run a node:
@@ -40,7 +39,6 @@ xray-easy add-route \
   -users users.json \
   -address relay.example.com \
   -port 443 \
-  -server-name www.cloudflare.com \
   relay-de > relay-config.json
 ```
 
@@ -125,10 +123,14 @@ Main node `config.json`:
 {
   "role": "main",
   "http_listen": "127.0.0.1:8080",
+  "loglevel": "warning",
+  "certificate": {
+    "cache_dir": "certs",
+    "ca_dir_url": "https://acme-v02.api.letsencrypt.org/directory"
+  },
   "inbound": {
     "listen": ":443",
-    "public_host": "main.example.com",
-    "server_name": "www.cloudflare.com",
+    "server_name": "main.example.com",
     "private_key": "...",
     "short_id": "..."
   },
@@ -150,16 +152,21 @@ Out node `config.json`:
 ```json
 {
   "role": "out",
-  "http_listen": "127.0.0.1:8080",
+  "loglevel": "warning",
   "inbound": {
     "listen": ":443",
-    "server_name": "www.cloudflare.com",
+    "server_name": "main.example.com",
+    "dest": "main.example.com:443",
     "private_key": "...",
     "short_id": "...",
     "relay_uuid": "..."
   }
 }
 ```
+
+For the main node steal-oneself setup, `inbound.server_name` must be a domain you control that reaches the main node's public `:443`. The same value is used for REALITY SNI, generated profile URLs, and the managed certificate.
+
+Out nodes do not serve profile pages and do not manage certificates. Their `inbound.dest` is the main node public address, and `inbound.server_name` is the main node REALITY SNI.
 
 Users live only on the main node:
 
