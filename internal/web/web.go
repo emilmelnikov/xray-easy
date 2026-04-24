@@ -136,7 +136,7 @@ var authTemplate = template.Must(template.New("auth").Parse(`<!doctype html>
 type ProfilePage struct {
 	Username        string
 	SubscriptionURL string
-	QRCodeDataURL   string
+	QRCodeDataURL   template.URL
 	Links           []string
 }
 
@@ -288,10 +288,10 @@ func redirectToAuth(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/auth", http.StatusFound)
 }
 
-func qrCodeDataURL(value string) (string, error) {
+func qrCodeDataURL(value string) (template.URL, error) {
 	png, err := qrcode.Encode(value, qrcode.Medium, 256)
 	if err != nil {
 		return "", err
 	}
-	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(png), nil
+	return template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)), nil
 }

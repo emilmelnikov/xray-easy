@@ -100,6 +100,12 @@ func TestMainHandlerServesProfileAndSubscription(t *testing.T) {
 		if !strings.Contains(string(body), "alice") || !strings.Contains(string(body), "/sub/token-1") {
 			t.Fatalf("profile body = %q, want username and subscription link", string(body))
 		}
+		if strings.Contains(string(body), "#ZgotmplZ") {
+			t.Fatalf("profile body contains blocked data URL marker: %q", string(body))
+		}
+		if !strings.Contains(string(body), `src="data:image/png;base64,`) {
+			t.Fatalf("profile body = %q, want inline QR code data URL", string(body))
+		}
 	})
 
 	t.Run("subscription", func(t *testing.T) {
