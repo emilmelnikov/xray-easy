@@ -116,6 +116,28 @@ To install a specific release instead, pass `XRAY_EASY_VERSION`:
 sudo XRAY_EASY_VERSION=v0.1.1 /usr/local/sbin/update-xray-easy
 ```
 
+## Backup and Restore
+
+Create a migration backup on the current host:
+
+```bash
+xray-easy backup \
+  -config /etc/xray-easy/config.json \
+  -users /etc/xray-easy/users.json \
+  -output xray-easy-backup.tar.gz
+```
+
+Restore it on the new host:
+
+```bash
+xray-easy restore \
+  -config /etc/xray-easy/config.json \
+  -users /etc/xray-easy/users.json \
+  xray-easy-backup.tar.gz
+```
+
+Backups include `config.json`, `users.json` for main nodes, and the managed certificate cache. Out node backups include only their config. The archive contains private keys and user tokens, so store and transfer it as a secret.
+
 ## Config Files
 
 Main node `config.json`:

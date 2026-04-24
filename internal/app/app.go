@@ -13,7 +13,9 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
+	"github.com/emilmelnikov/xray-easy/internal/backup"
 	"github.com/emilmelnikov/xray-easy/internal/config"
 	"github.com/emilmelnikov/xray-easy/internal/link"
 	"github.com/emilmelnikov/xray-easy/internal/runtime"
@@ -41,6 +43,10 @@ func run(args []string, stdout io.Writer, stderr io.Writer, entropy io.Reader) e
 		return runAddUser(args[1:], stdout, entropy)
 	case "add-route":
 		return runAddRoute(args[1:], stdout, entropy)
+	case "backup":
+		return runBackup(args[1:], stdout, stderr)
+	case "restore":
+		return runRestore(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		printUsage(stdout)
 		return nil
@@ -358,6 +364,61 @@ func runAddRoute(args []string, stdout io.Writer, entropy io.Reader) error {
 	return err
 }
 
+func runBackup(args []string, stdout io.Writer, stderr io.Writer) error {
+	fs := flag.NewFlagSet("backup", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+
+	configPath := fs.String("config", "config.json", "config file path")
+	usersPath := fs.String("users", "", "users file path")
+	outputPath := fs.String("output", "", "backup archive output path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("usage: xray-easy backup -config config.json -users users.json -output backup.tar.gz")
+	}
+
+	output := *outputPath
+	if output == "" {
+		output = defaultBackupPath(time.Now().UTC())
+	}
+	userPath := chooseUsersPath(*usersPath, *configPath)
+	if err := backup.Create(backup.CreateOptions{
+		ConfigPath: *configPath,
+		UsersPath:  userPath,
+		OutputPath: output,
+	}); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintln(stdout, output)
+	return err
+}
+
+func runRestore(args []string, stdout io.Writer, stderr io.Writer) error {
+	fs := flag.NewFlagSet("restore", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+
+	configPath := fs.String("config", "config.json", "config file path")
+	usersPath := fs.String("users", "", "users file path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return errors.New("usage: xray-easy restore -config config.json -users users.json <backup.tar.gz>")
+	}
+
+	userPath := chooseUsersPath(*usersPath, *configPath)
+	if err := backup.Restore(backup.RestoreOptions{
+		ConfigPath:  *configPath,
+		UsersPath:   userPath,
+		ArchivePath: fs.Arg(0),
+	}); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintln(stdout, "restored")
+	return err
+}
+
 func chooseUsersPath(usersPath string, configPath string) string {
 	if usersPath != "" {
 		return usersPath
@@ -372,7 +433,11 @@ func chooseUsersOutputPath(usersPath string, configPath string) string {
 	return filepath.Join(filepath.Dir(configPath), "users.json")
 }
 
+func defaultBackupPath(now time.Time) string {
+	return "xray-easy-backup-" + now.Format("20060102-150405") + ".tar.gz"
+}
+
 func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "usage: xray-easy <command> [flags]")
-	_, _ = fmt.Fprintln(w, "commands: serve, init-config, add-user, add-route")
+	_, _ = fmt.Fprintln(w, "commands: serve, init-config, add-user, add-route, backup, restore")
 }

@@ -262,6 +262,82 @@ func TestRunAddRoute(t *testing.T) {
 	}
 }
 
+func TestRunBackupAndRestore(t *testing.T) {
+	sourceDir := t.TempDir()
+	configPath := filepath.Join(sourceDir, "config.json")
+	usersPath := filepath.Join(sourceDir, "users.json")
+	backupPath := filepath.Join(sourceDir, "backup.tar.gz")
+
+	cfg := &config.Config{
+		Role:        config.RoleMain,
+		HTTPListen:  config.DefaultHTTPListen,
+		Certificate: testCertificate(),
+		Inbound: config.Inbound{
+			Listen:     ":443",
+			ServerName: "main.example.com",
+			PrivateKey: testPrivateKey,
+			ShortID:    testShortID,
+		},
+		Routes: []config.RouteEntry{
+			{ID: 1, Name: "main", Title: "main", Outbound: config.Outbound{Type: config.OutboundTypeFreedom}},
+		},
+	}
+	if err := config.Save(configPath, cfg); err != nil {
+		t.Fatalf("config.Save() error = %v", err)
+	}
+	file := &users.File{Users: []users.User{
+		{
+			Username: "alice",
+			Token:    "token-1",
+			Clients: []users.Client{
+				{Route: "main", UUID: "aaaaaaaa-bbbb-0001-dddd-eeeeeeeeeeee"},
+			},
+		},
+	}}
+	if err := users.Save(usersPath, file); err != nil {
+		t.Fatalf("users.Save() error = %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"backup",
+		"-config", configPath,
+		"-users", usersPath,
+		"-output", backupPath,
+	}, &stdout, &stderr, bytes.NewReader(nil))
+	if err != nil {
+		t.Fatalf("run(backup) error = %v, stderr = %q", err, stderr.String())
+	}
+	if strings.TrimSpace(stdout.String()) != backupPath {
+		t.Fatalf("backup stdout = %q, want %q", strings.TrimSpace(stdout.String()), backupPath)
+	}
+
+	restoreDir := t.TempDir()
+	restoreConfigPath := filepath.Join(restoreDir, "config.json")
+	restoreUsersPath := filepath.Join(restoreDir, "users.json")
+	stdout.Reset()
+	stderr.Reset()
+	err = run([]string{
+		"restore",
+		"-config", restoreConfigPath,
+		"-users", restoreUsersPath,
+		backupPath,
+	}, &stdout, &stderr, bytes.NewReader(nil))
+	if err != nil {
+		t.Fatalf("run(restore) error = %v, stderr = %q", err, stderr.String())
+	}
+	if strings.TrimSpace(stdout.String()) != "restored" {
+		t.Fatalf("restore stdout = %q, want restored", strings.TrimSpace(stdout.String()))
+	}
+	if _, err := config.Load(restoreConfigPath); err != nil {
+		t.Fatalf("config.Load(restored) error = %v", err)
+	}
+	if _, err := users.Load(restoreUsersPath); err != nil {
+		t.Fatalf("users.Load(restored) error = %v", err)
+	}
+}
+
 func testCertificate() config.Certificate {
 	return config.Certificate{
 		HTTPListen: config.DefaultCertHTTPListen,
