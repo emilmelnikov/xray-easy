@@ -2,10 +2,12 @@ package web
 
 import (
 	"bytes"
+	"embed"
 	"encoding/base64"
 	"errors"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/emilmelnikov/xray-easy/internal/config"
@@ -14,124 +16,13 @@ import (
 	qrcode "github.com/skip2/go-qrcode"
 )
 
-var profileTemplate = template.Must(template.New("profile").Parse(`<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{.Username}}</title>
-</head>
-<body>
-  <h1>{{.Username}}</h1>
-  <p><a href="{{.SubscriptionURL}}">Subscription</a></p>
-  <img src="{{.QRCodeDataURL}}" alt="Subscription QR code">
-  <ul>
-  {{range .Links}}
-    <li><code>{{.}}</code></li>
-  {{end}}
-  </ul>
-</body>
-</html>
-`))
+//go:embed templates/*.html
+var templateFS embed.FS
 
-var authTemplate = template.Must(template.New("auth").Parse(`<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in</title>
-  <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      background: #f5f7fb;
-      color: #172033;
-      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    main {
-      width: min(100% - 32px, 380px);
-      padding: 32px;
-      border: 1px solid #d9e0ec;
-      border-radius: 8px;
-      background: #fff;
-      box-shadow: 0 20px 50px rgb(23 32 51 / 10%);
-    }
-    h1 {
-      margin: 0 0 8px;
-      font-size: 24px;
-      line-height: 1.2;
-    }
-    p {
-      margin: 0 0 24px;
-      color: #66738a;
-    }
-    label {
-      display: block;
-      margin: 16px 0 6px;
-      font-size: 14px;
-      font-weight: 600;
-    }
-    input[type="email"],
-    input[type="password"] {
-      box-sizing: border-box;
-      width: 100%;
-      height: 44px;
-      border: 1px solid #b9c3d3;
-      border-radius: 6px;
-      padding: 0 12px;
-      font: inherit;
-    }
-    .row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 18px 0 22px;
-      color: #47546a;
-      font-size: 14px;
-    }
-    button {
-      width: 100%;
-      height: 44px;
-      border: 0;
-      border-radius: 6px;
-      background: #1f4f8f;
-      color: #fff;
-      font: inherit;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .error {
-      margin: 0 0 16px;
-      padding: 10px 12px;
-      border-radius: 6px;
-      background: #fff1f1;
-      color: #a32222;
-      font-size: 14px;
-    }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Sign in</h1>
-    <p>Use your account credentials to continue.</p>
-    {{if .Error}}<div class="error" role="alert">{{.Error}}</div>{{end}}
-    <form method="post" action="/auth">
-      <label for="email">Email</label>
-      <input id="email" name="email" type="email" autocomplete="username" value="{{.Email}}" required autofocus>
-      <label for="password">Password</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required>
-      <label class="row">
-        <input name="remember" type="checkbox" value="1">
-        <span>Remember this device</span>
-      </label>
-      <button type="submit">Sign in</button>
-    </form>
-  </main>
-</body>
-</html>
-`))
+var (
+	profileTemplate = template.Must(template.New("profile.html").ParseFS(templateFS, "templates/profile.html"))
+	authTemplate    = template.Must(template.New("auth.html").ParseFS(templateFS, "templates/auth.html"))
+)
 
 type authPage struct {
 	Email string
@@ -142,7 +33,13 @@ type ProfilePage struct {
 	Username        string
 	SubscriptionURL string
 	QRCodeDataURL   template.URL
+	DeepLinks       []ProfileDeepLink
 	Links           []string
+}
+
+type ProfileDeepLink struct {
+	Name string
+	URL  template.URL
 }
 
 func NewHandler(cfg *config.Config, file *users.File) (http.Handler, error) {
@@ -208,6 +105,7 @@ func newMainHandler(cfg *config.Config, file *users.File) http.Handler {
 			Username:        user.Username,
 			SubscriptionURL: subURL,
 			QRCodeDataURL:   qrDataURL,
+			DeepLinks:       profileDeepLinks(subURL, user.Username),
 			Links:           links,
 		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -294,4 +192,27 @@ func qrCodeDataURL(value string) (template.URL, error) {
 		return "", err
 	}
 	return template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)), nil
+}
+
+func profileDeepLinks(subURL, name string) []ProfileDeepLink {
+	querySub := url.QueryEscape(subURL)
+	queryName := url.QueryEscape(name)
+	pathSub := url.PathEscape(subURL)
+	fragmentName := url.PathEscape(name)
+
+	return []ProfileDeepLink{
+		{Name: "Streisand", URL: template.URL("streisand://import/" + pathSub + "#" + fragmentName)},
+		{Name: "Karing", URL: template.URL("karing://install-config?url=" + querySub + "&name=" + queryName)},
+		{Name: "FoxRay", URL: template.URL("foxray://yiguo.dev/sub/add/?url=" + querySub + "#" + fragmentName)},
+		{Name: "V2box", URL: template.URL("v2box://install-sub?url=" + querySub + "&name=" + queryName)},
+		{Name: "SingBox", URL: template.URL("sing-box://import-remote-profile?url=" + querySub + "#" + fragmentName)},
+		{Name: "ShadowRocket", URL: template.URL("sub://" + pathSub)},
+		{Name: "NekoRay", URL: template.URL("sn://subscription?url=" + querySub + "&name=" + queryName)},
+		{Name: "V2rayNG", URL: template.URL("v2rayng://install-sub/?url=" + querySub + "%23" + queryName)},
+		{Name: "ClashX", URL: template.URL("clashx://install-config?url=" + querySub)},
+		{Name: "Clash", URL: template.URL("clash://install-config?url=" + querySub)},
+		{Name: "FlClash", URL: template.URL("flclash://install-config?url=" + querySub)},
+		{Name: "Hiddify", URL: template.URL("hiddify://install-config/?url=" + querySub)},
+		{Name: "Happ", URL: template.URL("happ://add/" + pathSub)},
+	}
 }

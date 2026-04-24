@@ -106,6 +106,11 @@ func TestMainHandlerServesAuthFallback(t *testing.T) {
 		if !strings.Contains(string(body), `src="data:image/png;base64,`) {
 			t.Fatalf("profile body = %q, want inline QR code data URL", string(body))
 		}
+		for _, scheme := range []string{"streisand://", "karing://", "foxray://", "v2box://", "sing-box://", "sub://", "sn://", "v2rayng://", "clashx://", "clash://", "flclash://", "hiddify://", "happ://"} {
+			if !strings.Contains(string(body), scheme) {
+				t.Fatalf("profile body = %q, want deeplink scheme %q", string(body), scheme)
+			}
+		}
 	})
 
 	t.Run("subscription", func(t *testing.T) {
